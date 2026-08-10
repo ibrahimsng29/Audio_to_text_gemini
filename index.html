@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <title>Audio-to-Text Gemini | Cyber UI</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        /* Effet de lueur néon pour les éléments actifs */
+        .neon-glow {
+            box-shadow: 0 0 25px -5px rgba(99, 102, 241, 0.25);
+        }
+        /* Style de la scrollbar fluide */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body id="bodyRoot" class="bg-[#030712] text-slate-100 min-h-screen flex flex-col md:flex-row relative overflow-x-hidden font-sans">
+
+    <!-- BOUTON POUR OUVRIR/FERMER LA SIDEBAR -->
+    <button id="btnToggleSidebar" class="fixed top-5 left-5 z-50 bg-slate-900/85 backdrop-blur-md border border-slate-800 text-indigo-400 p-2.5 rounded-2xl shadow-2xl hover:bg-slate-800 transition cursor-pointer flex items-center justify-center">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+    </button>
+
+    <!-- BARRE LATÉRALE À GAUCHE (Glassmorphism) -->
+    <aside id="sidebar" class="w-80 bg-slate-950/80 backdrop-blur-xl border-r border-slate-900/80 p-6 flex flex-col justify-between shadow-2xl h-screen fixed top-0 left-0 z-40 transition-transform duration-300 ease-in-out">
+        <div>
+            <div class="mb-8 pl-12 flex justify-between items-center">
+                <div>
+                    <h1 class="text-xl font-black bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent tracking-tight">GEMINI AUDIO</h1>
+                    <p class="text-slate-500 text-[11px] font-medium tracking-wider uppercase mt-0.5">Cyber Workspace</p>
+                </div>
+            </div>
+
+            <!-- Type d'analyse -->
+            <div class="mb-6">
+                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">⚙️ Mode d'intelligence</label>
+                <select id="selectMode" class="w-full bg-slate-900/90 border border-slate-800 rounded-2xl p-3 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 transition cursor-pointer shadow-inner">
+                    <option value="resume">📝 Transcription + Résumé</option>
+                    <option value="bullet">📌 Résumé en puces</option>
+                    <option value="todo">🎯 Extraire les tâches (To-Do)</option>
+                    <option value="brut">✍️ Transcription brute</option>
+                </select>
+            </div>
+
+            <!-- Historique vertical -->
+            <div>
+                <h2 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">📜 Historique récent</h2>
+                <div id="listeHistorique" class="space-y-2 text-xs overflow-y-auto max-h-[420px] pr-1">
+                    <p id="aucunHistorique" class="text-slate-600 italic text-center py-6">Aucune session enregistrée</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-[11px] text-slate-600 text-center pt-4 border-t border-slate-900/80 font-medium">
+            Propulsé par Google Gemini
+        </div>
+    </aside>
+
+    <!-- CONTENU PRINCIPAL -->
+    <main class="flex-1 p-6 md:p-12 flex flex-col items-center overflow-y-auto ml-0 md:ml-80 transition-all duration-300">
+        <div class="max-w-2xl w-full mt-8 md:mt-0">
+            
+            <!-- En-tête -->
+            <div class="mb-8 text-center md:text-left">
+                <h2 class="text-3xl font-extrabold tracking-tight text-white">Tableau de bord</h2>
+                <p class="text-slate-400 text-sm mt-1">Convertissez instantanément vos fichiers audio ou votre voix en documents structurés.</p>
+            </div>
+
+            <!-- Carte 1 : Micro -->
+            <div class="bg-slate-900/40 backdrop-blur-xl rounded-3xl border border-slate-800/80 p-6 mb-6 neon-glow transition-all">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-9 h-9 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">🎙️</div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white">Enregistrement en direct</h3>
+                        <p class="text-xs text-slate-400">Utilisez votre microphone pour dicter vos notes</p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-3 items-center">
+                    <button id="btnEnregistrer" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold px-5 py-2.5 rounded-2xl transition shadow-lg shadow-emerald-900/20 cursor-pointer text-xs flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-white animate-ping"></span> Enregistrer
+                    </button>
+                    <button id="btnArreter" disabled class="bg-slate-800/50 border border-slate-700/50 disabled:opacity-40 text-slate-300 font-medium px-5 py-2.5 rounded-2xl transition cursor-pointer text-xs">
+                        ⏹️ Arrêter et Traiter
+                    </button>
+                </div>
+                <div class="statut text-xs font-medium text-slate-500 mt-3" id="statutMicro">En attente de démarrage...</div>
+            </div>
+
+            <!-- Carte 2 : Fichier PC -->
+            <div class="bg-slate-900/40 backdrop-blur-xl rounded-3xl border border-slate-800/80 p-6 mb-6 transition-all">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-9 h-9 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">📁</div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white">Importer depuis l'ordinateur</h3>
+                        <p class="text-xs text-slate-400">Glissez ou sélectionnez un fichier audio (MP3, WAV, WebM...)</p>
+                    </div>
+                </div>
+                <input type="file" id="inputFileAudio" accept="audio/*" class="block w-full text-xs text-slate-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600/10 file:text-indigo-400 hover:file:bg-indigo-600/20 cursor-pointer mb-4 border border-slate-800/80 rounded-2xl p-2 bg-slate-950/40">
+                <button id="btnEnvoyerFichier" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold px-5 py-2.5 rounded-2xl transition shadow-lg shadow-indigo-900/20 cursor-pointer text-xs">
+                    🚀 Lancer l'analyse IA
+                </button>
+                <div class="statut text-xs font-medium text-slate-500 mt-3" id="statutFichier">En attente d'un fichier...</div>
+            </div>
+
+            <!-- Zone de Résultat & Lecteur Audio -->
+            <div class="bg-slate-900/40 backdrop-blur-xl rounded-3xl border border-slate-800/80 p-6 relative transition-all">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">✨</div>
+                        <h3 class="text-sm font-bold text-white">Résultat de l'analyse</h3>
+                    </div>
+                    <button id="btnAnnuler" style="display: none;" class="bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 text-xs font-medium px-3 py-1.5 rounded-xl transition cursor-pointer">
+                        ❌ Annuler
+                    </button>
+                </div>
+                
+                <!-- Lecteur Audio Intégré -->
+                <div class="mb-4">
+                    <audio id="lecteurAudio" controls class="w-full hidden rounded-xl accent-indigo-500"></audio>
+                </div>
+
+                <div id="resultat" class="text-slate-300 bg-slate-950/60 border border-slate-900 p-5 rounded-2xl whitespace-pre-wrap min-h-[150px] max-h-[320px] overflow-y-auto text-xs leading-relaxed">
+                    Le texte structuré et les résumés apparaîtront ici...
+                </div>
+
+                <!-- Option de Traduction -->
+                <div id="traductionContainer" style="display: none;" class="mt-4 pt-4 border-t border-slate-800/60 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-2 w-full md:w-auto">
+                        <select id="selectLangue" class="bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 cursor-pointer">
+                            <option value="Anglais">🇬🇧 Anglais</option>
+                            <option value="Espagnol">🇪🇸 Espagnol</option>
+                            <option value="Allemand">🇩🇪 Allemand</option>
+                            <option value="Arabe">🇸🇦 Arabe</option>
+                            <option value="Italien">🇮🇹 Italien</option>
+                        </select>
+                        <button id="btnTraduire" class="bg-slate-800 hover:bg-slate-700 text-indigo-400 border border-slate-700/60 text-xs font-semibold px-4 py-2 rounded-xl transition cursor-pointer whitespace-nowrap">
+                            🌐 Traduire
+                        </button>
+                    </div>
+                    <div id="statutTraduction" class="text-xs text-slate-500"></div>
+                </div>
+
+                <!-- Boutons d'actions -->
+                <div id="actionsContainer" style="display: none;" class="mt-4 pt-4 border-t border-slate-800/60 flex flex-wrap items-center justify-between gap-3">
+                    <button id="btnCopier" class="bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-4 py-2.5 rounded-xl transition cursor-pointer border border-slate-700/50">
+                        📋 Copier
+                    </button>
+
+                    <div class="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0">
+                        <input type="text" id="inputEmail" placeholder="Emails (séparés par virgule)..." class="bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 flex-1 md:w-60">
+                        <button id="btnEnvoyerEmail" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition cursor-pointer whitespace-nowrap shadow-md">
+                            📤 Envoyer PDF
+                        </button>
+                    </div>
+                </div>
+                <div id="statutEmail" class="text-xs font-medium mt-2 text-right"></div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        let mediaRecorder, audioChunks = [];
+        let historiqueTranscriptions = [];
+        let titreActuel = "Enregistrement";
+        let blobActuel = null;
+        let controllerRequete = null;
+
+        const sidebar = document.getElementById('sidebar');
+        const btnToggleSidebar = document.getElementById('btnToggleSidebar');
+
+        const selectMode = document.getElementById('selectMode');
+        const btnEnr = document.getElementById('btnEnregistrer');
+        const btnArr = document.getElementById('btnArreter');
+        const statutMicro = document.getElementById('statutMicro');
+        
+        const inputFileAudio = document.getElementById('inputFileAudio');
+        const btnEnvoyerFichier = document.getElementById('btnEnvoyerFichier');
+        const statutFichier = document.getElementById('statutFichier');
+        
+        const resDiv = document.getElementById('resultat');
+        const btnAnnuler = document.getElementById('btnAnnuler');
+        const lecteurAudio = document.getElementById('lecteurAudio');
+        const traductionContainer = document.getElementById('traductionContainer');
+        const selectLangue = document.getElementById('selectLangue');
+        const btnTraduire = document.getElementById('btnTraduire');
+        const statutTraduction = document.getElementById('statutTraduction');
+
+        const actionsContainer = document.getElementById('actionsContainer');
+        const btnCopier = document.getElementById('btnCopier');
+        const inputEmail = document.getElementById('inputEmail');
+        const btnEnvoyerEmail = document.getElementById('btnEnvoyerEmail');
+        const statutEmail = document.getElementById('statutEmail');
+
+        const listeHistorique = document.getElementById('listeHistorique');
+        const aucunHistorique = document.getElementById('aucunHistorique');
+
+        btnToggleSidebar.onclick = () => {
+            sidebar.classList.toggle('-translate-x-full');
+        };
+
+        function chargerAudioDansLecteur(blobOuUrl) {
+            const url = typeof blobOuUrl === 'string' ? blobOuUrl : URL.createObjectURL(blobOuUrl);
+            lecteurAudio.src = url;
+            lecteurAudio.classList.remove('hidden');
+            lecteurAudio.onloadedmetadata = () => {
+                lecteurAudio.currentTime = 0;
+            };
+        }
+
+        btnAnnuler.onclick = () => {
+            if (controllerRequete) {
+                controllerRequete.abort();
+            }
+            btnAnnuler.style.display = "none";
+            statutMicro.textContent = "❌ Annulé.";
+            statutFichier.textContent = "❌ Annulé.";
+            resDiv.textContent = "Opération annulée.";
+        };
+
+        // --- MICRO ---
+        btnEnr.onclick = async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                mediaRecorder.onstop = async () => {
+                    statutMicro.textContent = "⏳ Analyse en cours...";
+                    resDiv.textContent = "🔄 Traitement audio...";
+                    actionsContainer.style.display = "none";
+                    traductionContainer.style.display = "none";
+                    btnAnnuler.style.display = "inline-block";
+                    
+                    blobActuel = new Blob(audioChunks, { type: 'audio/webm' });
+                    chargerAudioDansLecteur(blobActuel);
+
+                    envoyerAuServeur(blobActuel, statutMicro, "Enregistrement Micro");
+                };
+
+                mediaRecorder.start();
+                btnEnr.disabled = true;
+                btnEnr.textContent = "Enregistrement...";
+                btnEnr.classList.add('opacity-50', 'animate-pulse');
+                btnArr.disabled = false;
+                statutMicro.textContent = "Parlez...";
+            } catch (e) {
+                alert("Erreur micro : " + e.message);
+            }
+        };
+
+        btnArr.onclick = () => {
+            if (mediaRecorder) {
+                mediaRecorder.stop();
+                btnArr.disabled = true;
+                btnEnr.disabled = false;
+                btnEnr.textContent = "🔴 Enregistrer";
+                btnEnr.classList.remove('opacity-50', 'animate-pulse');
+            }
+        };
+
+        // --- FICHIER LOCAL ---
+        btnEnvoyerFichier.onclick = async () => {
+            const fichier = inputFileAudio.files[0];
+            if (!fichier) {
+                alert("Veuillez sélectionner un fichier audio !");
+                return;
+            }
+
+            statutFichier.textContent = "⏳ Analyse du fichier...";
+            resDiv.textContent = "🔄 Traitement du fichier...";
+            actionsContainer.style.display = "none";
+            traductionContainer.style.display = "none";
+            btnAnnuler.style.display = "inline-block";
+            
+            blobActuel = fichier;
+            chargerAudioDansLecteur(blobActuel);
+            
+            envoyerAuServeur(fichier, statutFichier, fichier.name);
+        };
+
+        async function envoyerAuServeur(audioBlob, elementStatut, nomSource) {
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'audio_file');
+            formData.append('mode', selectMode.value);
+            titreActuel = nomSource;
+
+            controllerRequete = new AbortController();
+
+            try {
+                const req = await fetch('http://localhost:3000/transcrire', { 
+                    method: 'POST', 
+                    body: formData,
+                    signal: controllerRequete.signal
+                });
+                const data = await req.json();
+                
+                btnAnnuler.style.display = "none";
+
+                if (data.success) {
+                    elementStatut.textContent = "✅ Terminé !";
+                    resDiv.textContent = data.texte;
+                    actionsContainer.style.display = "flex";
+                    traductionContainer.style.display = "flex";
+
+                    const nouvelItem = {
+                        id: Date.now(),
+                        titre: nomSource,
+                        date: new Date().toLocaleTimeString(),
+                        texte: data.texte,
+                        audioUrl: lecteurAudio.src
+                    };
+
+                    historiqueTranscriptions.unshift(nouvelItem);
+                    mettreAJourAffichageHistorique();
+
+                } else {
+                    elementStatut.textContent = "❌ Erreur.";
+                    resDiv.textContent = data.error;
+                }
+            } catch (err) {
+                btnAnnuler.style.display = "none";
+                if (err.name !== 'AbortError') {
+                    elementStatut.textContent = "❌ Erreur réseau.";
+                    resDiv.textContent = err.message;
+                }
+            }
+        }
+
+        // --- TRADUCTION ---
+        btnTraduire.onclick = async () => {
+            const texteActuel = resDiv.textContent;
+            const langueCible = selectLangue.value;
+
+            if (!texteActuel || texteActuel.startsWith("Le texte")) return;
+
+            statutTraduction.textContent = "⏳ Traduction...";
+
+            try {
+                const response = await fetch('http://localhost:3000/traduire', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        texteOriginal: texteActuel,
+                        langueCible: langueCible
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    resDiv.textContent = data.texteTraduit;
+                    statutTraduction.textContent = `✅ En ${langueCible}`;
+                } else {
+                    statutTraduction.textContent = "❌ Erreur";
+                }
+            } catch (err) {
+                statutTraduction.textContent = "❌ Erreur réseau";
+            }
+        };
+
+        // --- HISTORIQUE ---
+        function mettreAJourAffichageHistorique() {
+            if (historiqueTranscriptions.length === 0) {
+                aucunHistorique.style.display = "block";
+                return;
+            }
+            aucunHistorique.style.display = "none";
+            listeHistorique.innerHTML = "";
+
+            historiqueTranscriptions.forEach(item => {
+                const divElement = document.createElement('div');
+                divElement.className = "bg-slate-900/60 hover:bg-slate-900 p-3 rounded-2xl border border-slate-800/80 transition cursor-pointer shadow-sm";
+                
+                divElement.innerHTML = `
+                    <div class="font-semibold text-slate-200 truncate text-xs">📌 ${item.titre}</div>
+                    <div class="text-[10px] text-slate-500 mt-1">${item.date}</div>
+                `;
+
+                divElement.onclick = () => {
+                    resDiv.textContent = item.texte;
+                    actionsContainer.style.display = "flex";
+                    traductionContainer.style.display = "flex";
+                    titreActuel = item.titre;
+                    
+                    if (item.audioUrl) {
+                        chargerAudioDansLecteur(item.audioUrl);
+                    }
+                };
+
+                listeHistorique.appendChild(divElement);
+            });
+        }
+
+        // --- COPIER ---
+        btnCopier.onclick = () => {
+            navigator.clipboard.writeText(resDiv.textContent).then(() => {
+                btnCopier.textContent = "✨ Copié !";
+                setTimeout(() => {
+                    btnCopier.textContent = "📋 Copier";
+                }, 2000);
+            });
+        };
+
+        // --- PDF ---
+        btnEnvoyerEmail.onclick = async () => {
+            const email = inputEmail.value.trim();
+            const texte = resDiv.textContent;
+
+            if (!email) {
+                alert("Veuillez entrer une adresse e-mail valide.");
+                return;
+            }
+
+            statutEmail.textContent = "⏳ Envoi du PDF...";
+            statutEmail.className = "text-xs font-medium mt-2 text-right text-indigo-400";
+
+            try {
+                const response = await fetch('http://localhost:3000/envoyer-pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        emailDestinataire: email,
+                        texteAAfficher: texte,
+                        titreSource: titreActuel
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    statutEmail.textContent = "✅ PDF envoyé avec succès !";
+                    statutEmail.className = "text-xs font-medium mt-2 text-right text-emerald-400";
+                } else {
+                    statutEmail.textContent = "❌ Erreur : " + data.error;
+                    statutEmail.className = "text-xs font-medium mt-2 text-right text-rose-400";
+                }
+            } catch (err) {
+                statutEmail.textContent = "❌ Erreur réseau.";
+                statutEmail.className = "text-xs font-medium mt-2 text-right text-rose-400";
+            }
+        };
+    </script>
+</body>
+</html>
