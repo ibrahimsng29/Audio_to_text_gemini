@@ -13,7 +13,7 @@ app.use(cors());
 app.use(express.json()); // Permet de lire le JSON envoyé par le site
 
 // 🌟 C'est cette ligne qui dit au serveur d'afficher ton index.html !
-app.use(express.static('public'));
+app.use(express.static('.'));
 
 const upload = multer({ storage: multer.memoryStorage() });
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
