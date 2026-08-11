@@ -139,8 +139,11 @@ app.post('/envoyer-pdf', async (req, res) => {
 });
 
 const PORT = 3000;
-app.listen(PORT, () => {
-    console.log(`Serveur prêt sur http://localhost:${PORT}`);
+// On utilise le port fourni par Render, ou 3000 si on est en local sur son PC
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Serveur prêt sur le port ${PORT}`);
 });
 // 3. Nouvelle route : Traduction du texte par Gemini
 app.post('/traduire', async (req, res) => {
