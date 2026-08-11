@@ -137,8 +137,6 @@ app.post('/envoyer-pdf', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
-const PORT = 3000;
 // On utilise le port fourni par Render, ou 3000 si on est en local sur son PC
 const PORT = process.env.PORT || 3000;
 
