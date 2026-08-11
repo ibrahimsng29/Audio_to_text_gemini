@@ -299,7 +299,8 @@
             controllerRequete = new AbortController();
 
             try {
-                const req = await fetch('http://localhost:3000/transcrire', { 
+                // CORRECTION ICI : Remplacement de http://localhost:3000 par le chemin relatif
+                const req = await fetch('/transcrire', { 
                     method: 'POST', 
                     body: formData,
                     signal: controllerRequete.signal
@@ -348,7 +349,8 @@
             statutTraduction.textContent = "⏳ Traduction...";
 
             try {
-                const response = await fetch('http://localhost:3000/traduire', {
+                // CORRECTION ICI : Remplacement de http://localhost:3000 par le chemin relatif
+                const response = await fetch('/traduire', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -426,7 +428,8 @@
             statutEmail.className = "text-xs font-medium mt-2 text-right text-indigo-400";
 
             try {
-                const response = await fetch('http://localhost:3000/envoyer-pdf', {
+                // CORRECTION ICI : Remplacement de http://localhost:3000 par le chemin relatif
+                const response = await fetch('/envoyer-pdf', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
