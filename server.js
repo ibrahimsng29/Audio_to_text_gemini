@@ -11,12 +11,14 @@ import path from 'path';
 const app = express();
 app.use(cors());
 app.use(express.json()); // Permet de lire le JSON envoyé par le site
+
+// 🌟 C'est cette ligne qui dit au serveur d'afficher ton index.html !
 app.use(express.static('public'));
 
 const upload = multer({ storage: multer.memoryStorage() });
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// 1. Route de transcription (celle qu'on a déjà)
+// 1. Route de transcription
 app.post('/transcrire', upload.single('audio'), async (req, res) => {
     try {
         if (!req.file) {
@@ -54,7 +56,7 @@ app.post('/transcrire', upload.single('audio'), async (req, res) => {
     }
 });
 
-// 2. Nouvelle route : Génération de PDF et Envoi par Gmail
+// 2. Route : Génération de PDF et Envoi par Gmail
 app.post('/envoyer-pdf', async (req, res) => {
     try {
         const { emailDestinataire, texteAAfficher, titreSource } = req.body;
@@ -100,13 +102,11 @@ app.post('/envoyer-pdf', async (req, res) => {
 
         // Attendre que la création du fichier PDF soit bien terminée sur le disque
         stream.on('finish', async () => {
-            // Configuration de l'envoi d'e-mail via Nodemailer (Gmail)
-            // ⚠️ Note : Pour que Gmail accepte d'envoyer, il faudra utiliser un "Mot de passe d'application" Google si tu as la double authentification.
             const transporter = nodemailer.createTransport({
                 service: 'gmail',
                 auth: {
-                    user: process.env.EMAIL_USER,     // Ton adresse email Gmail
-                    pass: process.env.EMAIL_PASS      // Ton mot de passe d'application Gmail
+                    user: process.env.EMAIL_USER,
+                    pass: process.env.EMAIL_PASS
                 }
             });
 
@@ -137,13 +137,8 @@ app.post('/envoyer-pdf', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
-// On utilise le port fourni par Render, ou 3000 si on est en local sur son PC
-const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Serveur prêt sur le port ${PORT}`);
-});
-// 3. Nouvelle route : Traduction du texte par Gemini
+// 3. Route : Traduction du texte par Gemini
 app.post('/traduire', async (req, res) => {
     try {
         const { texteOriginal, langueCible } = req.body;
@@ -164,4 +159,10 @@ app.post('/traduire', async (req, res) => {
         console.error("Erreur de traduction :", error);
         res.status(500).json({ success: false, error: error.message });
     }
+});
+
+// 🚀 DÉMARRAGE DU SERVEUR (Toujours placé à la toute fin)
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Serveur prêt sur le port ${PORT}`);
 });
