@@ -7,18 +7,32 @@ import PDFDocument from 'pdfkit';
 import nodemailer from 'nodemailer';
 import fs from 'fs';
 import path from 'path';
+import mongoose from 'mongoose';
 
 const app = express();
 app.use(cors());
-app.use(express.json()); // Permet de lire le JSON envoyé par le site
+app.use(express.json());
+app.use(express.static('public'));
 
-// 🌟 C'est cette ligne qui dit au serveur d'afficher ton index.html !
-app.use(express.static('.'));
+// 🔗 Connexion à MongoDB
+mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log('✅ Connecté avec succès à MongoDB Atlas !'))
+    .catch(err => console.error('❌ Erreur de connexion MongoDB :', err));
+
+// 📐 Schéma et Modèle pour enregistrer l'historique
+const transcriptionSchema = new mongoose.Schema({
+    titre: { type: String, default: 'Enregistrement' },
+    texte: String,
+    mode: String,
+    date: { type: Date, default: Date.now }
+});
+
+const Transcription = mongoose.model('Transcription', transcriptionSchema);
 
 const upload = multer({ storage: multer.memoryStorage() });
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// 1. Route de transcription
+// 1. Route de transcription + Sauvegarde dans MongoDB
 app.post('/transcrire', upload.single('audio'), async (req, res) => {
     try {
         if (!req.file) {
@@ -26,6 +40,7 @@ app.post('/transcrire', upload.single('audio'), async (req, res) => {
         }
 
         const mode = req.body.mode || 'resume';
+        const titreSource = req.body.titreSource || 'Enregistrement audio';
         const audioBase64 = req.file.buffer.toString("base64");
         let mimeType = req.file.mimetype;
         if (!mimeType || mimeType === 'application/octet-stream') {
@@ -36,9 +51,9 @@ app.post('/transcrire', upload.single('audio'), async (req, res) => {
         if (mode === 'bullet') {
             instructionPrompt = "Transcris cet audio, puis fais-en un résumé détaillé structuré sous forme de puces (bullet points) claires.";
         } else if (mode === 'todo') {
-            instructionPrompt = "Analyse cet audio, transcris-le brièvement, et extrais une liste claire des tâches à accomplir ou des actions à faire sous forme de To-Do List.";
+            instructionPrompt = "Analyse cet audio, transcris-le brièvement, et extrais une liste claire des tâches à accomplir sous forme de To-Do List.";
         } else if (mode === 'brut') {
-            instructionPrompt = "Transcris fidèlement et intégralement cet audio en français, sans faire de résumé ni ajouter de commentaires superflus.";
+            instructionPrompt = "Transcris fidèlement et intégralement cet audio en français, sans commentaire.";
         }
 
         const response = await ai.models.generateContent({
@@ -49,14 +64,33 @@ app.post('/transcrire', upload.single('audio'), async (req, res) => {
             ]
         });
 
-        res.json({ success: true, texte: response.text });
+        // 💾 Enregistrement automatique dans la base de données
+        const nouvelleSauvegarde = new Transcription({
+            titre: titreSource,
+            texte: response.text,
+            mode: mode
+        });
+        await nouvelleSauvegarde.save();
+
+        res.json({ success: true, texte: response.text, id: nouvelleSauvegarde._id });
     } catch (error) {
         console.error("Erreur serveur :", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// 2. Route : Génération de PDF et Envoi par Gmail
+// 2. Nouvelle Route : Récupérer l'historique enregistré en BDD
+app.get('/historique', async (req, res) => {
+    try {
+        const historique = await Transcription.find().sort({ date: -1 }).limit(20);
+        res.json({ success: true, historique });
+    } catch (error) {
+        console.error("Erreur historique :", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 3. Route : Génération de PDF et Envoi par Gmail
 app.post('/envoyer-pdf', async (req, res) => {
     try {
         const { emailDestinataire, texteAAfficher, titreSource } = req.body;
@@ -65,21 +99,15 @@ app.post('/envoyer-pdf', async (req, res) => {
             return res.status(400).json({ success: false, error: "Email ou texte manquant." });
         }
 
-        // Chemin temporaire pour stocker le PDF avant l'envoi
         const pdfPath = path.join('uploads', `compte-rendu-${Date.now()}.pdf`);
-        
-        // S'assurer que le dossier uploads existe
         if (!fs.existsSync('uploads')) {
             fs.mkdirSync('uploads');
         }
 
-        // Création du document PDF (Format A4, marges propres)
         const doc = new PDFDocument({ margin: 50, size: 'A4' });
         const stream = fs.createWriteStream(pdfPath);
         doc.pipe(stream);
 
-        // --- DESIGN DU PDF ---
-        // En-tête professionnel
         doc.fontSize(20).fillColor('#4f46e5').text('Compte-Rendu Audio - Gemini', { align: 'left' });
         doc.fontSize(10).fillColor('#64748b').text(`Généré le : ${new Date().toLocaleString()}`, { align: 'left' });
         doc.moveDown();
@@ -89,18 +117,11 @@ app.post('/envoyer-pdf', async (req, res) => {
         doc.lineWidth(1).strokeColor('#e2e8f0').moveTo(50, doc.y).lineTo(545, doc.y).stroke();
         doc.moveDown();
 
-        // Corps du texte de l'analyse
-        doc.fontSize(11).fillColor('#1e293b').text(texteAAfficher, {
-            lineGap: 6,
-            align: 'justify'
-        });
-
-        // Pied de page du PDF
+        doc.fontSize(11).fillColor('#1e293b').text(texteAAfficher, { lineGap: 6, align: 'justify' });
         doc.fontSize(8).fillColor('#94a3b8').text('Document généré automatiquement par ton application Audio-to-Text Gemini.', 50, 750, { align: 'center', width: 500 });
 
         doc.end();
 
-        // Attendre que la création du fichier PDF soit bien terminée sur le disque
         stream.on('finish', async () => {
             const transporter = nodemailer.createTransport({
                 service: 'gmail',
@@ -114,41 +135,31 @@ app.post('/envoyer-pdf', async (req, res) => {
                 from: process.env.EMAIL_USER,
                 to: emailDestinataire,
                 subject: `📄 Compte-rendu audio : ${titreSource || 'Analyse Gemini'}`,
-                text: "Bonjour,\n\nVous trouverez ci-joint le compte-rendu professionnel de votre fichier audio généré par intelligence artificielle.\n\nCordialement,\nVotre Application Audio-to-Text",
-                attachments: [
-                    {
-                        filename: 'compte-rendu-gemini.pdf',
-                        path: pdfPath
-                    }
-                ]
+                text: "Bonjour,\n\nVous trouverez ci-joint le compte-rendu professionnel de votre fichier audio.\n\nCordialement,\nVotre Application",
+                attachments: [{ filename: 'compte-rendu-gemini.pdf', path: pdfPath }]
             };
 
-            // Envoi de l'e-mail
             await transporter.sendMail(mailOptions);
-
-            // Nettoyage : suppression du fichier PDF temporaire sur le PC
             fs.unlinkSync(pdfPath);
 
             res.json({ success: true, message: "PDF envoyé par e-mail avec succès !" });
         });
 
     } catch (error) {
-        console.error("Erreur lors de l'envoi du PDF :", error);
+        console.error("Erreur envoi PDF :", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// 3. Route : Traduction du texte par Gemini
+// 4. Route : Traduction
 app.post('/traduire', async (req, res) => {
     try {
         const { texteOriginal, langueCible } = req.body;
-
         if (!texteOriginal || !langueCible) {
             return res.status(400).json({ success: false, error: "Texte ou langue cible manquant." });
         }
 
-        const promptTraduction = `Traduis le texte suivant en ${langueCible}. Conserve fidèlement la structure, les puces ou les sections d'origine :\n\n${texteOriginal}`;
-
+        const promptTraduction = `Traduis le texte suivant en ${langueCible}. Conserve fidèlement la structure :\n\n${texteOriginal}`;
         const response = await ai.models.generateContent({
             model: 'gemini-3.6-flash',
             contents: [{ text: promptTraduction }]
@@ -161,7 +172,7 @@ app.post('/traduire', async (req, res) => {
     }
 });
 
-// 🚀 DÉMARRAGE DU SERVEUR (Toujours placé à la toute fin)
+// 🚀 Démarrage du serveur
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Serveur prêt sur le port ${PORT}`);

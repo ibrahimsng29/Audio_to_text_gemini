@@ -453,6 +453,27 @@
                 statutEmail.className = "text-xs font-medium mt-2 text-right text-rose-400";
             }
         };
+// Charger l'historique depuis MongoDB au démarrage de la page
+async function chargerHistoriqueDepuisBDD() {
+    try {
+        const response = await fetch('/historique');
+        const data = await response.json();
+        if (data.success && data.historique.length > 0) {
+            historiqueTranscriptions = data.historique.map(item => ({
+                id: item._id,
+                titre: item.titre,
+                date: new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                texte: item.texte
+            }));
+            mettreAJourAffichageHistorique();
+        }
+    } catch (err) {
+        console.error("Erreur chargement BDD:", err);
+    }
+}
+
+// Lancement automatique au chargement
+chargerHistoriqueDepuisBDD();        
     </script>
 </body>
 </html>
