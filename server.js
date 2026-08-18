@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'url';
 import express from 'express';
 import multer from 'multer';
 import cors from 'cors';
@@ -10,10 +11,22 @@ import path from 'path';
 import mongoose from 'mongoose';
 
 const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(express.static('public'));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
+// Servir les fichiers statiques (dossier public + racine)
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(__dirname));
+
+// Route explicite pour forcer l'affichage de la page d'accueil
+app.get('/', (req, res) => {
+    const publicIndexPath = path.join(__dirname, 'public', 'index.html');
+    if (fs.existsSync(publicIndexPath)) {
+        res.sendFile(publicIndexPath);
+    } else {
+        res.sendFile(path.join(__dirname, 'index.html'));
+    }
+});
 // 🔗 Connexion à MongoDB
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('✅ Connecté avec succès à MongoDB Atlas !'))
