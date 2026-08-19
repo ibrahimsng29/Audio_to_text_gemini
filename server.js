@@ -160,10 +160,12 @@ app.post('/envoyer-pdf', async (req, res) => {
         // 🛡️ AJOUT DE LA SÉCURITÉ ICI
         stream.on('finish', async () => {
             try {
+                // Configuration SMTP - Port 587
                 const transporter = nodemailer.createTransport({
                     host: 'smtp.gmail.com',
-                    port: 465,
-                    secure: true, // Utilise SSL
+                    port: 587,
+                    secure: false, // Doit être 'false' pour le port 587
+                    requireTLS: true,
                     auth: {
                         user: process.env.EMAIL_USER,
                         pass: process.env.EMAIL_PASS
