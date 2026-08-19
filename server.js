@@ -70,7 +70,7 @@ app.post('/transcrire', upload.single('audio'), async (req, res) => {
         if (mode === 'brut') instructionPrompt = "Transcris intégralement cet audio sans commentaire.";
 
         const response = await ai.models.generateContent({
-            model: 'gemini-1.5-flash',
+            model: 'gemini-3.6-flash',
             contents: [
                 { inlineData: { mimeType: mimeType, data: audioBase64 } },
                 { text: instructionPrompt }
