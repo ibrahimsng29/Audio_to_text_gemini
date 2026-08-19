@@ -174,7 +174,7 @@ app.post('/envoyer-pdf', async (req, res) => {
                     subject: `📄 Compte-rendu audio : ${titreSource || 'Analyse Gemini'}`,
                     text: "Bonjour,\n\nVeuillez trouver ci-joint votre compte-rendu PDF.\n\nCordialement,",
                     attachments: [{ filename: 'compte-rendu-gemini.pdf', path: pdfPath }]
-                };
+                }; 
 
                 await transporter.sendMail(mailOptions);
                 fs.unlinkSync(pdfPath);
