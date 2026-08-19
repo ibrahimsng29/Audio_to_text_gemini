@@ -157,36 +157,39 @@ app.post('/envoyer-pdf', async (req, res) => {
         doc.fontSize(8).fillColor('#94a3b8').text('Document généré automatiquement.', 50, 750, { align: 'center', width: 500 });
         doc.end();
 
+        // 🛡️ AJOUT DE LA SÉCURITÉ ICI
         stream.on('finish', async () => {
-            const transporter = nodemailer.createTransport({
-                service: 'gmail',
-                auth: {
-                    user: process.env.EMAIL_USER,
-                    pass: process.env.EMAIL_PASS
+            try {
+                const transporter = nodemailer.createTransport({
+                    service: 'gmail',
+                    auth: {
+                        user: process.env.EMAIL_USER,
+                        pass: process.env.EMAIL_PASS
+                    }
+                });
+
+                const mailOptions = {
+                    from: process.env.EMAIL_USER,
+                    to: emailDestinataire,
+                    subject: `📄 Compte-rendu audio : ${titreSource || 'Analyse Gemini'}`,
+                    text: "Bonjour,\n\nVeuillez trouver ci-joint votre compte-rendu PDF.\n\nCordialement,",
+                    attachments: [{ filename: 'compte-rendu-gemini.pdf', path: pdfPath }]
+                };
+
+                await transporter.sendMail(mailOptions);
+                fs.unlinkSync(pdfPath);
+
+                res.json({ success: true, message: "PDF envoyé avec succès !" });
+            } catch (mailError) {
+                console.error("🚨 Erreur d'envoi Gmail :", mailError);
+                if (!res.headersSent) {
+                    res.status(500).json({ success: false, error: "Erreur Gmail : Vérifiez votre mot de passe d'application." });
                 }
-            });
-
-            const mailOptions = {
-                from: process.env.EMAIL_USER,
-                to: emailDestinataire,
-                subject: `📄 Compte-rendu audio : ${titreSource || 'Analyse Gemini'}`,
-                text: "Bonjour,\n\nVeuillez trouver ci-joint votre compte-rendu PDF.\n\nCordialement,",
-                attachments: [{ filename: 'compte-rendu-gemini.pdf', path: pdfPath }]
-            };
-
-            await transporter.sendMail(mailOptions);
-            fs.unlinkSync(pdfPath);
-
-            res.json({ success: true, message: "PDF envoyé avec succès !" });
+            }
         });
 
     } catch (error) {
-        console.error("Erreur envoi PDF :", error);
+        console.error("Erreur génération PDF :", error);
         res.status(500).json({ success: false, error: error.message });
     }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Serveur prêt sur le port ${PORT}`);
 });
