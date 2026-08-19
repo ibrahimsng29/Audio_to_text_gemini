@@ -114,7 +114,7 @@ app.post('/traduire', async (req, res) => {
 
         const promptTraduction = `Traduis le texte suivant en ${langueCible}. Conserve fidèlement la structure :\n\n${texteOriginal}`;
         const response = await ai.models.generateContent({
-            model: 'gemini-1.5-flash',
+            model: 'gemini-3.6-flash',
             contents: [{ text: promptTraduction }]
         });
 
