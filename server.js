@@ -137,35 +137,23 @@ app.post('/envoyer-pdf', async (req, res) => {
             return res.status(400).json({ success: false, error: "Email ou texte manquant dans la requête." });
         }
 
-        const pdfPath = path.join('uploads', `compte-rendu-${Date.now()}.pdf`);
-        if (!fs.existsSync('uploads')) {
-            fs.mkdirSync('uploads');
-        }
-
+        // 1. Initialisation du PDF
         const doc = new PDFDocument({ margin: 50, size: 'A4' });
-        const stream = fs.createWriteStream(pdfPath);
-        doc.pipe(stream);
+        const buffers = []; // Tableau qui va stocker le PDF en mémoire
 
-        doc.fontSize(20).fillColor('#4f46e5').text('Compte-Rendu Audio - Gemini', { align: 'left' });
-        doc.fontSize(10).fillColor('#64748b').text(`Généré le : ${new Date().toLocaleString()}`, { align: 'left' });
-        doc.moveDown();
-        doc.fontSize(12).fillColor('#334155').text(`Source : ${titreSource || 'Enregistrement audio'}`, { bold: true });
-        doc.moveDown();
-        doc.lineWidth(1).strokeColor('#e2e8f0').moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-        doc.moveDown();
-        doc.fontSize(11).fillColor('#1e293b').text(texteAAfficher, { lineGap: 6, align: 'justify' });
-        doc.fontSize(8).fillColor('#94a3b8').text('Document généré automatiquement.', 50, 750, { align: 'center', width: 500 });
-        doc.end();
+        // À chaque fois que le PDF se dessine, on stocke les données en mémoire
+        doc.on('data', buffers.push.bind(buffers));
 
-        // 🛡️ AJOUT DE LA SÉCURITÉ ICI
-        stream.on('finish', async () => {
+        // 2. Événement déclenché quand le PDF a fini de se dessiner
+        doc.on('end', async () => {
+            const pdfData = Buffer.concat(buffers); // On assemble la mémoire pour créer le fichier final
+
             try {
-                // Configuration SMTP - Port 587
+                // Configuration SMTP (Port 465 sécurisé pour Gmail)
                 const transporter = nodemailer.createTransport({
                     host: 'smtp.gmail.com',
-                    port: 587,
-                    secure: false, // Doit être 'false' pour le port 587
-                    requireTLS: true,
+                    port: 465,
+                    secure: true, 
                     auth: {
                         user: process.env.EMAIL_USER,
                         pass: process.env.EMAIL_PASS
@@ -176,29 +164,41 @@ app.post('/envoyer-pdf', async (req, res) => {
                     from: process.env.EMAIL_USER,
                     to: emailDestinataire,
                     subject: `📄 Compte-rendu audio : ${titreSource || 'Analyse Gemini'}`,
-                    text: "Bonjour,\n\nVeuillez trouver ci-joint votre compte-rendu PDF.\n\nCordialement,",
-                    attachments: [{ filename: 'compte-rendu-gemini.pdf', path: pdfPath }]
+                    text: "Bonjour,\n\nVeuillez trouver ci-joint votre compte-rendu PDF généré par l'application.\n\nCordialement,",
+                    attachments: [{ 
+                        filename: 'compte-rendu-gemini.pdf', 
+                        content: pdfData, // On attache directement la mémoire vive !
+                        contentType: 'application/pdf'
+                    }]
                 }; 
 
                 await transporter.sendMail(mailOptions);
-                fs.unlinkSync(pdfPath);
-
                 res.json({ success: true, message: "PDF envoyé avec succès !" });
+
             } catch (mailError) {
                 console.error("🚨 Erreur d'envoi Gmail :", mailError);
                 if (!res.headersSent) {
-                    res.status(500).json({ success: false, error: "Erreur Gmail : Vérifiez votre mot de passe d'application." });
+                    res.status(500).json({ success: false, error: "Erreur d'envoi : Connexion bloquée par le serveur ou mot de passe invalide." });
                 }
             }
         });
+
+        // 3. Dessin du contenu du PDF
+        doc.fontSize(20).fillColor('#4f46e5').text('Compte-Rendu Audio - Gemini', { align: 'left' });
+        doc.fontSize(10).fillColor('#64748b').text(`Généré le : ${new Date().toLocaleString()}`, { align: 'left' });
+        doc.moveDown();
+        doc.fontSize(12).fillColor('#334155').text(`Source : ${titreSource || 'Enregistrement audio'}`, { bold: true });
+        doc.moveDown();
+        doc.lineWidth(1).strokeColor('#e2e8f0').moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+        doc.moveDown();
+        doc.fontSize(11).fillColor('#1e293b').text(texteAAfficher, { lineGap: 6, align: 'justify' });
+        doc.fontSize(8).fillColor('#94a3b8').text('Document généré automatiquement.', 50, 750, { align: 'center', width: 500 });
+        
+        // 4. Fin de l'édition (ceci déclenche l'événement doc.on('end') plus haut)
+        doc.end();
 
     } catch (error) {
         console.error("Erreur génération PDF :", error);
         res.status(500).json({ success: false, error: error.message });
     }
-});
-// 🚀 Démarrage du serveur
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Serveur prêt sur le port ${PORT}`);
 });
