@@ -202,7 +202,11 @@ app.post('/envoyer-pdf', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Serveur prêt sur le port ${PORT}`);
 });
+
+// 🚀 Modification ajoutée pour forcer GitHub à détecter un changement et redémarrer Render
+console.log("Le compte Render est maintenant vérifié. Déploiement en cours...");
