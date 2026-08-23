@@ -128,33 +128,80 @@ app.post('/traduire', async (req, res) => {
 });
 
 // 4. Envoi PDF
+app.post('/envoyer-pdf', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const emailDestinataire = body.emailDestinataire;
+        const texteAAfficher = body.texteAAfficher;
+        const titreSource = body.titreSource;
+
+        if (!emailDestinataire || !texteAAfficher) {
+            return res.status(400).json({ success: false, error: "Email ou texte manquant." });
+        }
+
+        // 1. Initialisation du PDF
+        const doc = new PDFDocument({ margin: 50, size: 'A4' });
+        const buffers = [];
+        
+        doc.on('data', buffers.push.bind(buffers));
+        
+        // 2. Événement déclenché quand le PDF a fini de se dessiner
         doc.on('end', async () => {
-            const pdfData = Buffer.concat(buffers); 
+            const pdfData = Buffer.concat(buffers);
+            const base64Pdf = pdfData.toString('base64'); // Resend a besoin du PDF encodé en Base64
 
             try {
-                // 🚀 Envoi via l'API Resend (Contourne le blocage Render)
-                const { data, error } = await resend.emails.send({
-                    from: 'Acme <onboarding@resend.dev>', // Adresse de test obligatoire de Resend
-                    to: emailDestinataire,
-                    subject: `📄 Compte-rendu audio : ${titreSource || 'Analyse Gemini'}`,
-                    text: "Bonjour,\n\nVeuillez trouver ci-joint votre compte-rendu PDF généré par l'application.\n\nCordialement,",
-                    attachments: [{ 
-                        filename: 'compte-rendu-gemini.pdf', 
-                        content: pdfData
-                    }]
+                // Requête HTTPS directe vers Resend (Port 443 - Impossible à bloquer par Render)
+                const resendResponse = await fetch('https://api.resend.com/emails', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        from: 'Application Gemini <onboarding@resend.dev>', // Obligatoire avec le plan gratuit Resend
+                        to: [emailDestinataire], // Doit être l'adresse avec laquelle tu t'es inscrit sur Resend
+                        subject: `📄 Compte-rendu audio : ${titreSource || 'Analyse Gemini'}`,
+                        text: "Bonjour,\n\nVeuillez trouver ci-joint votre compte-rendu PDF généré par l'application.\n\nCordialement,",
+                        attachments: [{ 
+                            filename: 'compte-rendu-gemini.pdf', 
+                            content: base64Pdf 
+                        }]
+                    })
                 });
 
-                if (error) {
-                    console.error("🚨 Erreur API Resend :", error);
-                    return res.status(500).json({ success: false, error: "Erreur API lors de l'envoi." });
+                if (!resendResponse.ok) {
+                    const errorData = await resendResponse.json();
+                    console.error("Erreur API Resend :", errorData);
+                    throw new Error(`L'API Resend a rejeté l'envoi: ${errorData.message}`);
                 }
 
-                res.json({ success: true, message: "PDF envoyé avec succès via API !" });
+                res.json({ success: true, message: "PDF envoyé avec succès via Resend !" });
 
             } catch (apiError) {
-                console.error("🚨 Crash API :", apiError);
+                console.error("🚨 Erreur d'envoi Resend :", apiError);
                 if (!res.headersSent) {
-                    res.status(500).json({ success: false, error: "Erreur critique de connexion à l'API." });
+                    res.status(500).json({ success: false, error: "Erreur d'envoi via l'API Resend." });
                 }
             }
         });
+
+        // 3. Dessin du contenu du PDF
+        doc.fontSize(20).fillColor('#4f46e5').text('Compte-Rendu Audio - Gemini', { align: 'left' });
+        doc.fontSize(10).fillColor('#64748b').text(`Généré le : ${new Date().toLocaleString()}`, { align: 'left' });
+        doc.moveDown();
+        doc.fontSize(12).fillColor('#334155').text(`Source : ${titreSource || 'Enregistrement audio'}`, { bold: true });
+        doc.moveDown();
+        doc.lineWidth(1).strokeColor('#e2e8f0').moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+        doc.moveDown();
+        doc.fontSize(11).fillColor('#1e293b').text(texteAAfficher, { lineGap: 6, align: 'justify' });
+        doc.fontSize(8).fillColor('#94a3b8').text('Document généré automatiquement.', 50, 750, { align: 'center', width: 500 });
+        
+        // 4. Fin de l'édition
+        doc.end();
+
+    } catch (error) {
+        console.error("Erreur génération PDF :", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
