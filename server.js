@@ -1,3 +1,5 @@
+import { Resend } from 'resend';
+const resend = new Resend(process.env.RESEND_API_KEY);
 import express from 'express';
 import multer from 'multer';
 import cors from 'cors';
@@ -126,89 +128,33 @@ app.post('/traduire', async (req, res) => {
 });
 
 // 4. Envoi PDF
-app.post('/envoyer-pdf', async (req, res) => {
-    try {
-        const body = req.body || {};
-        const emailDestinataire = body.emailDestinataire;
-        const texteAAfficher = body.texteAAfficher;
-        const titreSource = body.titreSource;
-
-        if (!emailDestinataire || !texteAAfficher) {
-            return res.status(400).json({ success: false, error: "Email ou texte manquant dans la requête." });
-        }
-
-        // 1. Initialisation du PDF
-        const doc = new PDFDocument({ margin: 50, size: 'A4' });
-        const buffers = []; // Tableau qui va stocker le PDF en mémoire
-
-        // À chaque fois que le PDF se dessine, on stocke les données en mémoire
-        doc.on('data', buffers.push.bind(buffers));
-
-        // 2. Événement déclenché quand le PDF a fini de se dessiner
         doc.on('end', async () => {
-            const pdfData = Buffer.concat(buffers); // On assemble la mémoire pour créer le fichier final
+            const pdfData = Buffer.concat(buffers); 
 
             try {
-                // Configuration SMTP (Port 465 sécurisé pour Gmail)
-              const transporter = nodemailer.createTransport({
-                    service: 'gmail', // Laisse Nodemailer choisir le meilleur port (465/587) tout seul
-                    auth: {
-                        user: process.env.EMAIL_USER,
-                        pass: process.env.EMAIL_PASS
-                    },
-                    tls: {
-                        rejectUnauthorized: false // Empêche le serveur de bloquer l'envoi pour un problème de certificat SSL
-                    },
-                    family: 4 // Force toujours l'utilisation de l'IPv4 classique
-                });
-
-                const mailOptions = {
-                    from: process.env.EMAIL_USER,
+                // 🚀 Envoi via l'API Resend (Contourne le blocage Render)
+                const { data, error } = await resend.emails.send({
+                    from: 'Acme <onboarding@resend.dev>', // Adresse de test obligatoire de Resend
                     to: emailDestinataire,
                     subject: `📄 Compte-rendu audio : ${titreSource || 'Analyse Gemini'}`,
                     text: "Bonjour,\n\nVeuillez trouver ci-joint votre compte-rendu PDF généré par l'application.\n\nCordialement,",
                     attachments: [{ 
                         filename: 'compte-rendu-gemini.pdf', 
-                        content: pdfData, // On attache directement la mémoire vive !
-                        contentType: 'application/pdf'
+                        content: pdfData
                     }]
-                }; 
+                });
 
-                await transporter.sendMail(mailOptions);
-                res.json({ success: true, message: "PDF envoyé avec succès !" });
+                if (error) {
+                    console.error("🚨 Erreur API Resend :", error);
+                    return res.status(500).json({ success: false, error: "Erreur API lors de l'envoi." });
+                }
 
-            } catch (mailError) {
-                console.error("🚨 Erreur d'envoi Gmail :", mailError);
+                res.json({ success: true, message: "PDF envoyé avec succès via API !" });
+
+            } catch (apiError) {
+                console.error("🚨 Crash API :", apiError);
                 if (!res.headersSent) {
-                    res.status(500).json({ success: false, error: "Erreur d'envoi : Connexion bloquée par le serveur ou mot de passe invalide." });
+                    res.status(500).json({ success: false, error: "Erreur critique de connexion à l'API." });
                 }
             }
         });
-
-        // 3. Dessin du contenu du PDF
-        doc.fontSize(20).fillColor('#4f46e5').text('Compte-Rendu Audio - Gemini', { align: 'left' });
-        doc.fontSize(10).fillColor('#64748b').text(`Généré le : ${new Date().toLocaleString()}`, { align: 'left' });
-        doc.moveDown();
-        doc.fontSize(12).fillColor('#334155').text(`Source : ${titreSource || 'Enregistrement audio'}`, { bold: true });
-        doc.moveDown();
-        doc.lineWidth(1).strokeColor('#e2e8f0').moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-        doc.moveDown();
-        doc.fontSize(11).fillColor('#1e293b').text(texteAAfficher, { lineGap: 6, align: 'justify' });
-        doc.fontSize(8).fillColor('#94a3b8').text('Document généré automatiquement.', 50, 750, { align: 'center', width: 500 });
-        
-        // 4. Fin de l'édition (ceci déclenche l'événement doc.on('end') plus haut)
-        doc.end();
-
-    } catch (error) {
-        console.error("Erreur génération PDF :", error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Serveur prêt sur le port ${PORT}`);
-});
-
-// 🚀 Modification ajoutée pour forcer GitHub à détecter un changement et redémarrer Render
-console.log("Le compte Render est maintenant vérifié. Déploiement en cours...");
