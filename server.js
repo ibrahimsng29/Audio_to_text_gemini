@@ -151,15 +151,15 @@ app.post('/envoyer-pdf', async (req, res) => {
             try {
                 // Configuration SMTP (Port 465 sécurisé pour Gmail)
               const transporter = nodemailer.createTransport({
-                    host: 'smtp.gmail.com',
-                    port: 465,
-                    secure: true, 
+                    service: 'gmail', // Laisse Nodemailer choisir le meilleur port (465/587) tout seul
                     auth: {
                         user: process.env.EMAIL_USER,
                         pass: process.env.EMAIL_PASS
                     },
-                    // 🚀 LE CORRECTIF EST ICI : Forcer Node.js à utiliser l'IPv4 classique
-                    family: 4
+                    tls: {
+                        rejectUnauthorized: false // Empêche le serveur de bloquer l'envoi pour un problème de certificat SSL
+                    },
+                    family: 4 // Force toujours l'utilisation de l'IPv4 classique
                 });
 
                 const mailOptions = {
