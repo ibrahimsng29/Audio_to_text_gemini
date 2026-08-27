@@ -63,16 +63,17 @@
                         <p class="text-slate-500 text-[11px] font-medium tracking-wider uppercase mt-0.5">Cyber Workspace</p>
                     </div>
                 </div>
+
                 <!-- 👤 PROFIL UTILISATEUR -->
-                <div id="profil-utilisateur" class="hidden mb-6 bg-slate-900/60 p-3 rounded-2xl border border-slate-800/80 flex items-center gap-3 shadow-inner">
-                <div id="avatar-lettre" class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-black text-lg shadow-md">
-        U
+                <div id="profil-utilisateur" class="hidden mb-6 bg-slate-900/60 p-3 rounded-2xl border border-slate-800/80 items-center gap-3 shadow-inner">
+                    <div id="avatar-lettre" class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-black text-lg shadow-md shrink-0">
+                        U
+                    </div>
+                    <div class="overflow-hidden">
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Session active</p>
+                        <p id="profil-email" class="text-xs text-slate-200 font-bold truncate">utilisateur@email.com</p>
+                    </div>
                 </div>
-                <div class="overflow-hidden">
-                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Session active</p>
-                <p id="profil-email" class="text-xs text-slate-200 font-bold truncate">utilisateur@email.com</p>
-               </div>
-    </div>
 
                 <!-- Type d'analyse -->
                 <div class="mb-6">
@@ -88,7 +89,7 @@
                 <!-- Historique vertical -->
                 <div>
                     <h2 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">📜 Historique récent</h2>
-                    <div id="listeHistorique" class="space-y-2 text-xs overflow-y-auto max-h-[420px] pr-1">
+                    <div id="listeHistorique" class="space-y-2 text-xs overflow-y-auto max-h-[350px] pr-1">
                         <p id="aucunHistorique" class="text-slate-600 italic text-center py-6">Aucune session enregistrée</p>
                     </div>
                 </div>
@@ -282,6 +283,7 @@
                         basculerModeAuth(); 
                     } else {
                         localStorage.setItem('gemini_token', data.token);
+                        localStorage.setItem('gemini_email', data.email); // 👈 Sauvegarde de l'e-mail
                         demarrerApplication();
                     }
                 } else {
@@ -298,14 +300,32 @@
             document.getElementById('auth-section').classList.add('hidden');
             document.getElementById('app-section').classList.remove('hidden');
             document.getElementById('app-section').classList.add('flex');
-            chargerHistoriqueDepuisBDD(); // On charge les données uniquement après connexion
+            
+            // 👤 Affichage dynamique du profil dans la sidebar
+            const email = localStorage.getItem('gemini_email') || 'Utilisateur';
+            document.getElementById('profil-email').innerText = email;
+            document.getElementById('avatar-lettre').innerText = email.charAt(0).toUpperCase();
+            
+            const profilDiv = document.getElementById('profil-utilisateur');
+            profilDiv.classList.remove('hidden');
+            profilDiv.classList.add('flex');
+
+            chargerHistoriqueDepuisBDD();
         }
 
         function seDeconnecter() {
             localStorage.removeItem('gemini_token');
+            localStorage.removeItem('gemini_email'); // 👈 Nettoyage
+            
             document.getElementById('auth-section').classList.remove('hidden');
             document.getElementById('app-section').classList.add('hidden');
             document.getElementById('app-section').classList.remove('flex');
+            
+            // Cache le profil
+            const profilDiv = document.getElementById('profil-utilisateur');
+            profilDiv.classList.add('hidden');
+            profilDiv.classList.remove('flex');
+
             document.getElementById('auth-email').value = '';
             document.getElementById('auth-password').value = '';
         }
