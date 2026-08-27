@@ -40,7 +40,7 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 
 const transcriptionSchema = new mongoose.Schema({
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // 🛡️ Obligatoire maintenant
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, 
     titre: { type: String, default: 'Enregistrement' },
     texte: String,
     mode: String,
@@ -48,7 +48,7 @@ const transcriptionSchema = new mongoose.Schema({
 });
 const Transcription = mongoose.model('Transcription', transcriptionSchema);
 
-// 🛡️ CORRECTION FAILLE 2 : Limite stricte de 20 Mo pour éviter les crashs
+// 🛡️ Limite stricte de 20 Mo pour éviter les crashs
 const upload = multer({ 
     storage: multer.memoryStorage(),
     limits: { fileSize: 20 * 1024 * 1024 }, // 20 Mo max
@@ -139,7 +139,6 @@ app.get('/', (req, res) => {
     }
 });
 
-// 🛡️ CORRECTION FAILLE 1 & 3 : Route protégée + Sauvegarde ID Utilisateur
 app.post('/transcrire', verifierToken, upload.single('audio'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ success: false, error: "Aucun fichier audio reçu." });
@@ -163,7 +162,7 @@ app.post('/transcrire', verifierToken, upload.single('audio'), async (req, res) 
         });
 
         const nouvelleSauvegarde = new Transcription({
-            userId: req.user.id, // 🛡️ On lie le fichier à la bonne personne
+            userId: req.user.id, 
             titre: titreSource,
             texte: response.text,
             mode: mode
@@ -177,7 +176,6 @@ app.post('/transcrire', verifierToken, upload.single('audio'), async (req, res) 
     }
 });
 
-// 🛡️ Route protégée : Chacun voit uniquement SON historique
 app.get('/historique', verifierToken, async (req, res) => {
     try {
         const historique = await Transcription.find({ userId: req.user.id }).sort({ date: -1 }).limit(20);
@@ -187,7 +185,6 @@ app.get('/historique', verifierToken, async (req, res) => {
     }
 });
 
-// 🛡️ Route protégée
 app.post('/traduire', verifierToken, async (req, res) => {
     try {
         const body = req.body || {};
@@ -209,7 +206,6 @@ app.post('/traduire', verifierToken, async (req, res) => {
     }
 });
 
-// 🛡️ Route protégée
 app.post('/envoyer-pdf', verifierToken, async (req, res) => {
     try {
         const body = req.body || {};
