@@ -5,13 +5,12 @@ import cors from 'cors';
 import { GoogleGenAI } from '@google/genai';
 import 'dotenv/config';
 import PDFDocument from 'pdfkit';
-import nodemailer from 'nodemailer';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs'; // 🛡️ Ajout pour le hachage des mots de passe
-import jwt from 'jsonwebtoken'; // 🎫 Ajout pour la création des sessions (Tokens)
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const __filename = fileURLToPath(import.meta.url);
@@ -20,22 +19,19 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.use(cors());
 
-// 🛠️ Middlewares de parsing pour sécuriser req.body
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Fichiers statiques
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(__dirname));
 
-// Connexion MongoDB
 if (process.env.MONGO_URI) {
     mongoose.connect(process.env.MONGO_URI)
         .then(() => console.log('✅ Connecté à MongoDB Atlas !'))
         .catch(err => console.error('❌ Erreur MongoDB :', err));
 }
 
-// 🛡️ NOUVEAU : Modèle Utilisateur
+// Modèles
 const userSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
@@ -43,10 +39,8 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', userSchema);
 
-// 🔄 MODIFIÉ : Modèle Transcription
 const transcriptionSchema = new mongoose.Schema({
-    // userId est optionnel pour l'instant, le temps que tu mettes à jour ton interface front-end
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, 
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // 🛡️ Obligatoire maintenant
     titre: { type: String, default: 'Enregistrement' },
     texte: String,
     mode: String,
@@ -54,28 +48,55 @@ const transcriptionSchema = new mongoose.Schema({
 });
 const Transcription = mongoose.model('Transcription', transcriptionSchema);
 
-const upload = multer({ storage: multer.memoryStorage() });
+// 🛡️ CORRECTION FAILLE 2 : Limite stricte de 20 Mo pour éviter les crashs
+const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 20 * 1024 * 1024 }, // 20 Mo max
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/')) {
+            cb(null, true);
+        } else {
+            cb(new Error("Format non autorisé. Seul l'audio/vidéo est accepté."));
+        }
+    }
+});
+
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // ==========================================
-// 🔐 ROUTES D'AUTHENTIFICATION (NOUVEAU)
+// 🛡️ LE VIGILE (Middleware de sécurité)
 // ==========================================
+const verifierToken = (req, res, next) => {
+    const authHeader = req.header('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: "Accès refusé. Veuillez vous connecter." });
+    }
 
-// Inscription
+    const token = authHeader.replace('Bearer ', '');
+    try {
+        const secret = process.env.JWT_SECRET || 'cle_secrete_provisoire_pour_le_dev';
+        const utilisateurVerifie = jwt.verify(token, secret);
+        req.user = utilisateurVerifie; 
+        next(); 
+    } catch (error) {
+        res.status(403).json({ error: "Token invalide ou expiré." });
+    }
+};
+
+// ==========================================
+// 🔐 ROUTES D'AUTHENTIFICATION
+// ==========================================
 app.post('/api/register', async (req, res) => {
     try {
         const { email, password } = req.body;
         if (!email || !password) return res.status(400).json({ error: "Email et mot de passe requis." });
 
-        // Vérifier si l'utilisateur existe déjà
         const existingUser = await User.findOne({ email });
         if (existingUser) return res.status(400).json({ error: "Cet email est déjà utilisé." });
 
-        // Hacher le mot de passe
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Sauvegarder le nouvel utilisateur
         const newUser = new User({ email, password: hashedPassword });
         await newUser.save();
 
@@ -86,20 +107,16 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-// Connexion
 app.post('/api/login', async (req, res) => {
     try {
         const { email, password } = req.body;
         
-        // Trouver l'utilisateur
         const user = await User.findOne({ email });
         if (!user) return res.status(400).json({ error: "Email ou mot de passe incorrect." });
 
-        // Vérifier le mot de passe
         const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) return res.status(400).json({ error: "Email ou mot de passe incorrect." });
 
-        // Créer le token JWT (Passeport)
         const tokenSecret = process.env.JWT_SECRET || 'cle_secrete_provisoire_pour_le_dev';
         const token = jwt.sign({ id: user._id, email: user.email }, tokenSecret, { expiresIn: '24h' });
 
@@ -111,10 +128,8 @@ app.post('/api/login', async (req, res) => {
 });
 
 // ==========================================
-// 🎙️ ROUTES DE L'APPLICATION (EXISTANTES)
+// 🎙️ ROUTES PROTÉGÉES DE L'APPLICATION
 // ==========================================
-
-// Page d'accueil
 app.get('/', (req, res) => {
     const publicIndexPath = path.join(__dirname, 'public', 'index.html');
     if (fs.existsSync(publicIndexPath)) {
@@ -124,8 +139,8 @@ app.get('/', (req, res) => {
     }
 });
 
-// 1. Transcription
-app.post('/transcrire', upload.single('audio'), async (req, res) => {
+// 🛡️ CORRECTION FAILLE 1 & 3 : Route protégée + Sauvegarde ID Utilisateur
+app.post('/transcrire', verifierToken, upload.single('audio'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ success: false, error: "Aucun fichier audio reçu." });
 
@@ -148,6 +163,7 @@ app.post('/transcrire', upload.single('audio'), async (req, res) => {
         });
 
         const nouvelleSauvegarde = new Transcription({
+            userId: req.user.id, // 🛡️ On lie le fichier à la bonne personne
             titre: titreSource,
             texte: response.text,
             mode: mode
@@ -161,18 +177,18 @@ app.post('/transcrire', upload.single('audio'), async (req, res) => {
     }
 });
 
-// 2. Historique
-app.get('/historique', async (req, res) => {
+// 🛡️ Route protégée : Chacun voit uniquement SON historique
+app.get('/historique', verifierToken, async (req, res) => {
     try {
-        const historique = await Transcription.find().sort({ date: -1 }).limit(20);
+        const historique = await Transcription.find({ userId: req.user.id }).sort({ date: -1 }).limit(20);
         res.json({ success: true, historique });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// 3. Traduction
-app.post('/traduire', async (req, res) => {
+// 🛡️ Route protégée
+app.post('/traduire', verifierToken, async (req, res) => {
     try {
         const body = req.body || {};
         const texteOriginal = body.texteOriginal;
@@ -193,8 +209,8 @@ app.post('/traduire', async (req, res) => {
     }
 });
 
-// 4. Envoi PDF
-app.post('/envoyer-pdf', async (req, res) => {
+// 🛡️ Route protégée
+app.post('/envoyer-pdf', verifierToken, async (req, res) => {
     try {
         const body = req.body || {};
         const emailDestinataire = body.emailDestinataire;
@@ -263,7 +279,6 @@ app.post('/envoyer-pdf', async (req, res) => {
     }
 });
 
-// 🚀 Démarrage du serveur
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Serveur prêt sur le port ${PORT}`);
