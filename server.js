@@ -1,5 +1,4 @@
 import { Resend } from 'resend';
-const resend = new Resend(process.env.RESEND_API_KEY);
 import express from 'express';
 import multer from 'multer';
 import cors from 'cors';
@@ -11,7 +10,10 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs'; // 🛡️ Ajout pour le hachage des mots de passe
+import jwt from 'jsonwebtoken'; // 🎫 Ajout pour la création des sessions (Tokens)
 
+const resend = new Resend(process.env.RESEND_API_KEY);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -33,16 +35,84 @@ if (process.env.MONGO_URI) {
         .catch(err => console.error('❌ Erreur MongoDB :', err));
 }
 
+// 🛡️ NOUVEAU : Modèle Utilisateur
+const userSchema = new mongoose.Schema({
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    dateCreation: { type: Date, default: Date.now }
+});
+const User = mongoose.model('User', userSchema);
+
+// 🔄 MODIFIÉ : Modèle Transcription
 const transcriptionSchema = new mongoose.Schema({
+    // userId est optionnel pour l'instant, le temps que tu mettes à jour ton interface front-end
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, 
     titre: { type: String, default: 'Enregistrement' },
     texte: String,
     mode: String,
     date: { type: Date, default: Date.now }
 });
-
 const Transcription = mongoose.model('Transcription', transcriptionSchema);
+
 const upload = multer({ storage: multer.memoryStorage() });
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+// ==========================================
+// 🔐 ROUTES D'AUTHENTIFICATION (NOUVEAU)
+// ==========================================
+
+// Inscription
+app.post('/api/register', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) return res.status(400).json({ error: "Email et mot de passe requis." });
+
+        // Vérifier si l'utilisateur existe déjà
+        const existingUser = await User.findOne({ email });
+        if (existingUser) return res.status(400).json({ error: "Cet email est déjà utilisé." });
+
+        // Hacher le mot de passe
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        // Sauvegarder le nouvel utilisateur
+        const newUser = new User({ email, password: hashedPassword });
+        await newUser.save();
+
+        res.status(201).json({ success: true, message: "Compte créé avec succès !" });
+    } catch (error) {
+        console.error("Erreur inscription :", error);
+        res.status(500).json({ success: false, error: "Erreur lors de la création du compte." });
+    }
+});
+
+// Connexion
+app.post('/api/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        
+        // Trouver l'utilisateur
+        const user = await User.findOne({ email });
+        if (!user) return res.status(400).json({ error: "Email ou mot de passe incorrect." });
+
+        // Vérifier le mot de passe
+        const validPassword = await bcrypt.compare(password, user.password);
+        if (!validPassword) return res.status(400).json({ error: "Email ou mot de passe incorrect." });
+
+        // Créer le token JWT (Passeport)
+        const tokenSecret = process.env.JWT_SECRET || 'cle_secrete_provisoire_pour_le_dev';
+        const token = jwt.sign({ id: user._id, email: user.email }, tokenSecret, { expiresIn: '24h' });
+
+        res.json({ success: true, token, email: user.email, message: "Connexion réussie !" });
+    } catch (error) {
+        console.error("Erreur connexion :", error);
+        res.status(500).json({ success: false, error: "Erreur lors de la connexion." });
+    }
+});
+
+// ==========================================
+// 🎙️ ROUTES DE L'APPLICATION (EXISTANTES)
+// ==========================================
 
 // Page d'accueil
 app.get('/', (req, res) => {
@@ -57,9 +127,7 @@ app.get('/', (req, res) => {
 // 1. Transcription
 app.post('/transcrire', upload.single('audio'), async (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ success: false, error: "Aucun fichier audio reçu." });
-        }
+        if (!req.file) return res.status(400).json({ success: false, error: "Aucun fichier audio reçu." });
 
         const mode = req.body?.mode || 'resume';
         const titreSource = req.body?.titreSource || 'Enregistrement audio';
@@ -110,9 +178,7 @@ app.post('/traduire', async (req, res) => {
         const texteOriginal = body.texteOriginal;
         const langueCible = body.langueCible;
 
-        if (!texteOriginal || !langueCible) {
-            return res.status(400).json({ success: false, error: "Données de traduction manquantes." });
-        }
+        if (!texteOriginal || !langueCible) return res.status(400).json({ success: false, error: "Données manquantes." });
 
         const promptTraduction = `Traduis le texte suivant en ${langueCible}. Conserve fidèlement la structure :\n\n${texteOriginal}`;
         const response = await ai.models.generateContent({
@@ -135,23 +201,18 @@ app.post('/envoyer-pdf', async (req, res) => {
         const texteAAfficher = body.texteAAfficher;
         const titreSource = body.titreSource;
 
-        if (!emailDestinataire || !texteAAfficher) {
-            return res.status(400).json({ success: false, error: "Email ou texte manquant." });
-        }
+        if (!emailDestinataire || !texteAAfficher) return res.status(400).json({ success: false, error: "Email ou texte manquant." });
 
-        // 1. Initialisation du PDF
         const doc = new PDFDocument({ margin: 50, size: 'A4' });
         const buffers = [];
         
         doc.on('data', buffers.push.bind(buffers));
         
-        // 2. Événement déclenché quand le PDF a fini de se dessiner
         doc.on('end', async () => {
             const pdfData = Buffer.concat(buffers);
-            const base64Pdf = pdfData.toString('base64'); // Resend a besoin du PDF encodé en Base64
+            const base64Pdf = pdfData.toString('base64'); 
 
             try {
-                // Requête HTTPS directe vers Resend (Port 443 - Impossible à bloquer par Render)
                 const resendResponse = await fetch('https://api.resend.com/emails', {
                     method: 'POST',
                     headers: {
@@ -159,8 +220,8 @@ app.post('/envoyer-pdf', async (req, res) => {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        from: 'Application Gemini <onboarding@resend.dev>', // Obligatoire avec le plan gratuit Resend
-                        to: [emailDestinataire], // Doit être l'adresse avec laquelle tu t'es inscrit sur Resend
+                        from: 'Application Gemini <onboarding@resend.dev>', 
+                        to: [emailDestinataire], 
                         subject: `📄 Compte-rendu audio : ${titreSource || 'Analyse Gemini'}`,
                         text: "Bonjour,\n\nVeuillez trouver ci-joint votre compte-rendu PDF généré par l'application.\n\nCordialement,",
                         attachments: [{ 
@@ -172,7 +233,6 @@ app.post('/envoyer-pdf', async (req, res) => {
 
                 if (!resendResponse.ok) {
                     const errorData = await resendResponse.json();
-                    console.error("Erreur API Resend :", errorData);
                     throw new Error(`L'API Resend a rejeté l'envoi: ${errorData.message}`);
                 }
 
@@ -186,7 +246,6 @@ app.post('/envoyer-pdf', async (req, res) => {
             }
         });
 
-        // 3. Dessin du contenu du PDF
         doc.fontSize(20).fillColor('#4f46e5').text('Compte-Rendu Audio - Gemini', { align: 'left' });
         doc.fontSize(10).fillColor('#64748b').text(`Généré le : ${new Date().toLocaleString()}`, { align: 'left' });
         doc.moveDown();
@@ -196,8 +255,6 @@ app.post('/envoyer-pdf', async (req, res) => {
         doc.moveDown();
         doc.fontSize(11).fillColor('#1e293b').text(texteAAfficher, { lineGap: 6, align: 'justify' });
         doc.fontSize(8).fillColor('#94a3b8').text('Document généré automatiquement.', 50, 750, { align: 'center', width: 500 });
-        
-        // 4. Fin de l'édition
         doc.end();
 
     } catch (error) {
@@ -205,6 +262,7 @@ app.post('/envoyer-pdf', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
 // 🚀 Démarrage du serveur
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
