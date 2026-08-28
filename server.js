@@ -48,10 +48,10 @@ const transcriptionSchema = new mongoose.Schema({
 });
 const Transcription = mongoose.model('Transcription', transcriptionSchema);
 
-// 🛡️ Limite stricte de 20 Mo pour éviter les crashs
+// 🛡️ Limite stricte de 100 Mo pour éviter les crashs
 const upload = multer({ 
     storage: multer.memoryStorage(),
-    limits: { fileSize: 20 * 1024 * 1024 }, // 20 Mo max
+    limits: { fileSize: 100 * 1024 * 1024 }, // 100 Mo max
     fileFilter: (req, file, cb) => {
         if (file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/')) {
             cb(null, true);
