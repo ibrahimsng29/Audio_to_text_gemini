@@ -218,7 +218,7 @@ app.post('/envoyer-pdf', verifierToken, async (req, res) => {
             return res.status(400).json({ success: false, error: "Email ou texte manquant." });
         }
 
-        // Découpage de la chaîne pour gérer plusieurs adresses séparées par des virgules ou points-virgules
+        // 🛠️ Découpage de la chaîne en tableau d'emails (séparés par des virgules ou points-virgules)
         const listeEmails = emailDestinataireInput
             .split(/[,;]/)
             .map(e => e.trim())
@@ -246,7 +246,7 @@ app.post('/envoyer-pdf', verifierToken, async (req, res) => {
                     },
                     body: JSON.stringify({
                         from: 'Application Gemini <onboarding@resend.dev>', 
-                        to: listeEmails, // Envoi simultané à toutes les adresses du tableau
+                        to: listeEmails, // 🚀 Resend envoie le PDF à TOUTES ces adresses d'un coup !
                         subject: `📄 Compte-rendu audio : ${titreSource || 'Analyse Gemini'}`,
                         text: "Bonjour,\n\nVeuillez trouver ci-joint votre compte-rendu PDF généré par l'application.\n\nCordialement,",
                         attachments: [{ 
@@ -287,7 +287,6 @@ app.post('/envoyer-pdf', verifierToken, async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Serveur prêt sur le port ${PORT}`);
