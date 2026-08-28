@@ -206,14 +206,27 @@ app.post('/traduire', verifierToken, async (req, res) => {
     }
 });
 
+// 🚀 ROUTE PDF MODIFIÉE POUR SUPPORTER PLUSIEURS EMAILS
 app.post('/envoyer-pdf', verifierToken, async (req, res) => {
     try {
         const body = req.body || {};
-        const emailDestinataire = body.emailDestinataire;
+        const emailDestinataireInput = body.emailDestinataire;
         const texteAAfficher = body.texteAAfficher;
         const titreSource = body.titreSource;
 
-        if (!emailDestinataire || !texteAAfficher) return res.status(400).json({ success: false, error: "Email ou texte manquant." });
+        if (!emailDestinataireInput || !texteAAfficher) {
+            return res.status(400).json({ success: false, error: "Email ou texte manquant." });
+        }
+
+        // Découpage de la chaîne pour gérer plusieurs adresses séparées par des virgules ou points-virgules
+        const listeEmails = emailDestinataireInput
+            .split(/[,;]/)
+            .map(e => e.trim())
+            .filter(e => e.length > 0);
+
+        if (listeEmails.length === 0) {
+            return res.status(400).json({ success: false, error: "Aucun email valide fourni." });
+        }
 
         const doc = new PDFDocument({ margin: 50, size: 'A4' });
         const buffers = [];
@@ -233,7 +246,7 @@ app.post('/envoyer-pdf', verifierToken, async (req, res) => {
                     },
                     body: JSON.stringify({
                         from: 'Application Gemini <onboarding@resend.dev>', 
-                        to: [emailDestinataire], 
+                        to: listeEmails, // Envoi simultané à toutes les adresses du tableau
                         subject: `📄 Compte-rendu audio : ${titreSource || 'Analyse Gemini'}`,
                         text: "Bonjour,\n\nVeuillez trouver ci-joint votre compte-rendu PDF généré par l'application.\n\nCordialement,",
                         attachments: [{ 
@@ -248,7 +261,7 @@ app.post('/envoyer-pdf', verifierToken, async (req, res) => {
                     throw new Error(`L'API Resend a rejeté l'envoi: ${errorData.message}`);
                 }
 
-                res.json({ success: true, message: "PDF envoyé avec succès via Resend !" });
+                res.json({ success: true, message: "PDF envoyé avec succès à tous les destinataires !" });
 
             } catch (apiError) {
                 console.error("🚨 Erreur d'envoi Resend :", apiError);
