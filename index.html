@@ -208,7 +208,20 @@
             </div>
         </main>
     </div>
-
+                    <div class="flex flex-col md:flex-row items-center gap-2 w-full md:w-auto mt-2 md:mt-0">
+    <!-- 📄 Sélecteur de modèle de PDF -->
+    <select id="selectModePdf" class="bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 cursor-pointer">
+        <option value="classique">📄 Modèle Classique</option>
+        <option value="executif">📊 Modèle Synthèse & Tâches</option>
+        <option value="academique">🎓 Modèle Notes de Cours</option>
+    </select>
+    
+    <input type="text" id="inputEmail" placeholder="Emails (séparés par virgule)..." class="bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 flex-1 md:w-48">
+    
+    <button id="btnEnvoyerEmail" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition cursor-pointer whitespace-nowrap shadow-md">
+        📤 Envoyer PDF
+    </button>
+                   </div>
     <script>
         // --- VARIABLES GLOBALES ---
         let mediaRecorder, audioChunks = [];
