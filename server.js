@@ -1,4 +1,3 @@
-import { Resend } from 'resend';
 import express from 'express';
 import multer from 'multer';
 import cors from 'cors';
@@ -11,8 +10,8 @@ import { fileURLToPath } from 'url';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import nodemailer from 'nodemailer'; // 🚀 Remplacement de Resend par Nodemailer
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -30,6 +29,15 @@ if (process.env.MONGO_URI) {
         .then(() => console.log('✅ Connecté à MongoDB Atlas !'))
         .catch(err => console.error('❌ Erreur MongoDB :', err));
 }
+
+// ✉️ Configuration Nodemailer (Gmail)
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER, // 👈 Ton e-mail dans le fichier .env
+        pass: process.env.EMAIL_PASS  // 👈 Ton mot de passe d'application dans le fichier .env
+    }
+});
 
 // Modèles
 const userSchema = new mongoose.Schema({
@@ -206,7 +214,7 @@ app.post('/traduire', verifierToken, async (req, res) => {
     }
 });
 
-// 🚀 ROUTE PDF MODIFIÉE POUR SUPPORTER PLUSIEURS EMAILS
+// 🚀 ROUTE PDF MODIFIÉE AVEC NODEMAILER
 app.post('/envoyer-pdf', verifierToken, async (req, res) => {
     try {
         const body = req.body || {};
@@ -234,43 +242,34 @@ app.post('/envoyer-pdf', verifierToken, async (req, res) => {
         doc.on('data', buffers.push.bind(buffers));
         
         doc.on('end', async () => {
-            const pdfData = Buffer.concat(buffers);
-            const base64Pdf = pdfData.toString('base64'); 
+            const pdfBuffer = Buffer.concat(buffers);
 
             try {
-                const resendResponse = await fetch('https://api.resend.com/emails', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        from: 'Application Gemini <onboarding@resend.dev>', 
-                        to: listeEmails, // 🚀 Resend envoie le PDF à TOUTES ces adresses d'un coup !
-                        subject: `📄 Compte-rendu audio : ${titreSource || 'Analyse Gemini'}`,
-                        text: "Bonjour,\n\nVeuillez trouver ci-joint votre compte-rendu PDF généré par l'application.\n\nCordialement,",
-                        attachments: [{ 
-                            filename: 'compte-rendu-gemini.pdf', 
-                            content: base64Pdf 
-                        }]
-                    })
-                });
+                // 📧 Configuration de l'e-mail pour Nodemailer
+                const mailOptions = {
+                    from: `"Application Gemini Audio" <${process.env.EMAIL_USER}>`,
+                    to: listeEmails.join(', '), // Nodemailer accepte une chaîne avec les e-mails séparés par des virgules
+                    subject: `📄 Compte-rendu audio : ${titreSource || 'Analyse Gemini'}`,
+                    text: "Bonjour,\n\nVeuillez trouver ci-joint votre compte-rendu PDF généré par l'application.\n\nCordialement,",
+                    attachments: [{ 
+                        filename: 'compte-rendu-gemini.pdf', 
+                        content: pdfBuffer // Pas besoin de passer par du Base64, Nodemailer prend le buffer directement !
+                    }]
+                };
 
-                if (!resendResponse.ok) {
-                    const errorData = await resendResponse.json();
-                    throw new Error(`L'API Resend a rejeté l'envoi: ${errorData.message}`);
-                }
+                // Envoi de l'e-mail
+                await transporter.sendMail(mailOptions);
+                res.json({ success: true, message: "PDF envoyé avec succès à tous les destinataires via Gmail !" });
 
-                res.json({ success: true, message: "PDF envoyé avec succès à tous les destinataires !" });
-
-            } catch (apiError) {
-                console.error("🚨 Erreur d'envoi Resend :", apiError);
+            } catch (mailError) {
+                console.error("🚨 Erreur d'envoi Nodemailer :", mailError);
                 if (!res.headersSent) {
-                    res.status(500).json({ success: false, error: "Erreur d'envoi via l'API Resend." });
+                    res.status(500).json({ success: false, error: "Erreur lors de l'envoi via Gmail." });
                 }
             }
         });
 
+        // Dessin du PDF
         doc.fontSize(20).fillColor('#4f46e5').text('Compte-Rendu Audio - Gemini', { align: 'left' });
         doc.fontSize(10).fillColor('#64748b').text(`Généré le : ${new Date().toLocaleString()}`, { align: 'left' });
         doc.moveDown();
@@ -287,6 +286,7 @@ app.post('/envoyer-pdf', verifierToken, async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Serveur prêt sur le port ${PORT}`);
