@@ -2,6 +2,8 @@
 <html lang="fr" class="dark">
 <head>
     <meta charset="UTF-8">
+    <!-- 🚀 BALISE VIEWPORT : Obligatoire pour adapter la taille sur mobile -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Audio-to-Text Gemini | Cyber UI</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
@@ -19,6 +21,41 @@
         ::-webkit-scrollbar-thumb {
             background: rgba(255, 255, 255, 0.1);
             border-radius: 10px;
+        }
+
+        /* 📱 RÈGLES RESPONSIVE MOBILE */
+        @media screen and (max-width: 768px) {
+            /* Masque par défaut la sidebar sur mobile avec transition fluide */
+            #sidebar {
+                transform: translateX(-100%);
+                width: 100% !important;
+                max-width: 300px;
+            }
+
+            /* Réinitialise la marge du contenu principal pour petit écran */
+            main {
+                margin-left: 0 !important;
+                padding: 1rem !important;
+            }
+
+            /* Réorganisation verticale des zones d'actions et de traduction */
+            #actionsContainer, #traductionContainer {
+                flex-direction: column !important;
+                align-items: stretch !important;
+            }
+
+            #actionsContainer > div, 
+            #traductionContainer > div {
+                width: 100% !important;
+                flex-direction: column !important;
+            }
+
+            /* Adaptation des champs et boutons sur toute la largeur */
+            input[type="text"], 
+            select, 
+            button {
+                width: 100% !important;
+            }
         }
     </style>
 </head>
@@ -55,7 +92,7 @@
         </button>
 
         <!-- BARRE LATÉRALE À GAUCHE (Glassmorphism) -->
-        <aside id="sidebar" class="w-80 bg-slate-950/80 backdrop-blur-xl border-r border-slate-900/80 p-6 flex flex-col justify-between shadow-2xl h-screen fixed top-0 left-0 z-40 transition-transform duration-300 ease-in-out">
+        <aside id="sidebar" class="w-80 bg-slate-950/80 backdrop-blur-xl border-r border-slate-900/80 p-6 flex flex-col justify-between shadow-2xl h-screen fixed top-0 left-0 z-40 -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out">
             <div>
                 <div class="mb-8 pl-12 flex justify-between items-center">
                     <div>
@@ -102,7 +139,7 @@
 
         <!-- CONTENU PRINCIPAL -->
         <main class="flex-1 p-6 md:p-12 flex flex-col items-center overflow-y-auto ml-0 md:ml-80 transition-all duration-300 w-full">
-            <div class="max-w-2xl w-full mt-8 md:mt-0">
+            <div class="max-w-2xl w-full mt-12 md:mt-0">
                 
                 <!-- En-tête avec bouton Déconnexion -->
                 <div class="mb-8 text-center md:text-left flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -140,8 +177,8 @@
                     <div class="flex items-center gap-3 mb-4">
                         <div class="w-9 h-9 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">📁</div>
                         <div>
-                            <h3 class="text-sm font-bold text-white">Importer depuis l'ordinateur</h3>
-                            <p class="text-xs text-slate-400">Glissez ou sélectionnez un fichier audio (MP3, WAV, WebM...)</p>
+                            <h3 class="text-sm font-bold text-white">Importer un fichier</h3>
+                            <p class="text-xs text-slate-400">Glissez ou sélectionnez un fichier audio/vidéo (MP3, WAV, MP4...)</p>
                         </div>
                     </div>
                     <input type="file" id="inputFileAudio" accept="audio/*,video/*" class="block w-full text-xs text-slate-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600/10 file:text-indigo-400 hover:file:bg-indigo-600/20 cursor-pointer mb-4 border border-slate-800/80 rounded-2xl p-2 bg-slate-950/40">
@@ -283,7 +320,7 @@
                         basculerModeAuth(); 
                     } else {
                         localStorage.setItem('gemini_token', data.token);
-                        localStorage.setItem('gemini_email', data.email); // 👈 Sauvegarde de l'e-mail
+                        localStorage.setItem('gemini_email', data.email);
                         demarrerApplication();
                     }
                 } else {
@@ -301,7 +338,6 @@
             document.getElementById('app-section').classList.remove('hidden');
             document.getElementById('app-section').classList.add('flex');
             
-            // 👤 Affichage dynamique du profil dans la sidebar
             const email = localStorage.getItem('gemini_email') || 'Utilisateur';
             document.getElementById('profil-email').innerText = email;
             document.getElementById('avatar-lettre').innerText = email.charAt(0).toUpperCase();
@@ -315,13 +351,12 @@
 
         function seDeconnecter() {
             localStorage.removeItem('gemini_token');
-            localStorage.removeItem('gemini_email'); // 👈 Nettoyage
+            localStorage.removeItem('gemini_email');
             
             document.getElementById('auth-section').classList.remove('hidden');
             document.getElementById('app-section').classList.add('hidden');
             document.getElementById('app-section').classList.remove('flex');
             
-            // Cache le profil
             const profilDiv = document.getElementById('profil-utilisateur');
             profilDiv.classList.add('hidden');
             profilDiv.classList.remove('flex');
@@ -430,7 +465,7 @@
             try {
                 const req = await fetch('/transcrire', { 
                     method: 'POST', 
-                    headers: { 'Authorization': `Bearer ${token}` }, // 🛡️ Le Vigile
+                    headers: { 'Authorization': `Bearer ${token}` },
                     body: formData,
                     signal: controllerRequete.signal
                 });
@@ -483,7 +518,7 @@
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}` // 🛡️ Le Vigile
+                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify({ texteOriginal: texteActuel, langueCible: langueCible })
                 });
@@ -518,7 +553,7 @@
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}` // 🛡️ Le Vigile
+                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify({ emailDestinataire: email, texteAAfficher: texte, titreSource: titreActuel })
                 });
@@ -545,7 +580,7 @@
             const token = localStorage.getItem('gemini_token');
             try {
                 const response = await fetch('/historique', {
-                    headers: { 'Authorization': `Bearer ${token}` } // 🛡️ Le Vigile
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
                 if (response.status === 401 || response.status === 403) return seDeconnecter();
