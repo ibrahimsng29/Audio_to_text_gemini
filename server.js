@@ -1,7 +1,3 @@
-import dns from 'dns';
-// 🚀 Forcer Node.js à utiliser IPv4 en priorité sur tout le serveur (résout ENETUNREACH sur Render)
-dns.setDefaultResultOrder('ipv4first');
-
 import express from 'express';
 import multer from 'multer';
 import cors from 'cors';
@@ -14,7 +10,6 @@ import { fileURLToPath } from 'url';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import nodemailer from 'nodemailer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,20 +28,6 @@ if (process.env.MONGO_URI) {
         .then(() => console.log('✅ Connecté à MongoDB Atlas !'))
         .catch(err => console.error('❌ Erreur MongoDB :', err));
 }
-
-// ✉️ Configuration Nodemailer IPv4 explicite pour Gmail
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // STARTTLS sur port 587
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    },
-    tls: {
-        rejectUnauthorized: false
-    }
-});
 
 // Modèles MongoDB
 const userSchema = new mongoose.Schema({
@@ -223,7 +204,7 @@ app.post('/traduire', verifierToken, async (req, res) => {
     }
 });
 
-// 🚀 ROUTE ENVOI PDF AVEC NODEMAILER
+// 🚀 ROUTE ENVOI PDF VIA API REST BREVO (Incompatible avec le blocage SMTP Render)
 app.post('/envoyer-pdf', verifierToken, async (req, res) => {
     try {
         const body = req.body || {};
@@ -236,6 +217,7 @@ app.post('/envoyer-pdf', verifierToken, async (req, res) => {
             return res.status(400).json({ success: false, error: "Email ou texte manquant." });
         }
 
+        // Découpage des adresses séparées par des virgules ou points-virgules
         const listeEmails = emailDestinataireInput
             .split(/[,;]/)
             .map(e => e.trim())
@@ -245,6 +227,9 @@ app.post('/envoyer-pdf', verifierToken, async (req, res) => {
             return res.status(400).json({ success: false, error: "Aucun email valide fourni." });
         }
 
+        // Formatage pour l'API Brevo : [{ email: 'un@gmail.com' }, { email: 'autre@gmail.com' }]
+        const destinatairesBrevo = listeEmails.map(email => ({ email }));
+
         const doc = new PDFDocument({ margin: 50, size: 'A4' });
         const buffers = [];
         
@@ -252,26 +237,45 @@ app.post('/envoyer-pdf', verifierToken, async (req, res) => {
         
         doc.on('end', async () => {
             const pdfBuffer = Buffer.concat(buffers);
+            const base64Pdf = pdfBuffer.toString('base64');
 
             try {
-                const mailOptions = {
-                    from: `"Application Gemini Audio" <${process.env.EMAIL_USER}>`,
-                    to: listeEmails.join(', '),
-                    subject: `📄 Compte-rendu (${modePdf}) : ${titreSource || 'Analyse Gemini'}`,
-                    text: "Bonjour,\n\nVeuillez trouver ci-joint votre compte-rendu PDF généré par l'application.\n\nCordialement,",
-                    attachments: [{ 
-                        filename: `compte-rendu-${modePdf}.pdf`, 
-                        content: pdfBuffer 
-                    }]
-                };
+                // Appel API REST HTTPS (Port 443 — non filtré par Render)
+                const brevoResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
+                    method: 'POST',
+                    headers: {
+                        'accept': 'application/json',
+                        'api-key': process.env.BREVO_API_KEY,
+                        'content-type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        sender: { 
+                            name: "Application Gemini Audio", 
+                            email: process.env.EMAIL_USER 
+                        },
+                        to: destinatairesBrevo,
+                        subject: `📄 Compte-rendu (${modePdf}) : ${titreSource || 'Analyse Gemini'}`,
+                        textContent: "Bonjour,\n\nVeuillez trouver ci-joint votre compte-rendu PDF généré par l'application.\n\nCordialement,",
+                        attachment: [{ 
+                            name: `compte-rendu-${modePdf}.pdf`, 
+                            content: base64Pdf 
+                        }]
+                    })
+                });
 
-                await transporter.sendMail(mailOptions);
+                const brevoResult = await brevoResponse.json();
+
+                if (!brevoResponse.ok) {
+                    console.error("🚨 Erreur API Brevo :", brevoResult);
+                    throw new Error(brevoResult.message || "Échec de l'envoi via Brevo.");
+                }
+
                 res.json({ success: true, message: "PDF envoyé avec succès à tous les destinataires !" });
 
             } catch (mailError) {
-                console.error("🚨 Erreur d'envoi Nodemailer :", mailError);
+                console.error("🚨 Erreur d'envoi Brevo :", mailError);
                 if (!res.headersSent) {
-                    res.status(500).json({ success: false, error: "Erreur lors de l'envoi via Gmail." });
+                    res.status(500).json({ success: false, error: "Erreur lors de l'envoi de l'e-mail." });
                 }
             }
         });
