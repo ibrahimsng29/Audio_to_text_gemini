@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import nodemailer from 'nodemailer'; // 🚀 Remplacement de Resend par Nodemailer
+import nodemailer from 'nodemailer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,13 +30,16 @@ if (process.env.MONGO_URI) {
         .catch(err => console.error('❌ Erreur MongoDB :', err));
 }
 
-// ✉️ Configuration Nodemailer (Gmail)
+// ✉️ Configuration Nodemailer (Gmail forcé en IPv4 pour Render)
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // STARTTLS
     auth: {
-        user: process.env.EMAIL_USER, // 👈 Ton e-mail dans le fichier .env
-        pass: process.env.EMAIL_PASS  // 👈 Ton mot de passe d'application dans le fichier .env
-    }
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    },
+    family: 4 // 🚀 Force la connexion en IPv4 pour corriger l'erreur ENETUNREACH sur Render
 });
 
 // Modèles
@@ -214,19 +217,19 @@ app.post('/traduire', verifierToken, async (req, res) => {
     }
 });
 
-// 🚀 ROUTE PDF MODIFIÉE AVEC NODEMAILER
+// 🚀 ROUTE PDF AVEC NODEMAILER (IPv4 & Multi-destinataires)
 app.post('/envoyer-pdf', verifierToken, async (req, res) => {
     try {
         const body = req.body || {};
         const emailDestinataireInput = body.emailDestinataire;
         const texteAAfficher = body.texteAAfficher;
         const titreSource = body.titreSource;
+        const modePdf = body.modePdf || 'classique';
 
         if (!emailDestinataireInput || !texteAAfficher) {
             return res.status(400).json({ success: false, error: "Email ou texte manquant." });
         }
 
-        // 🛠️ Découpage de la chaîne en tableau d'emails (séparés par des virgules ou points-virgules)
         const listeEmails = emailDestinataireInput
             .split(/[,;]/)
             .map(e => e.trim())
@@ -245,21 +248,19 @@ app.post('/envoyer-pdf', verifierToken, async (req, res) => {
             const pdfBuffer = Buffer.concat(buffers);
 
             try {
-                // 📧 Configuration de l'e-mail pour Nodemailer
                 const mailOptions = {
                     from: `"Application Gemini Audio" <${process.env.EMAIL_USER}>`,
-                    to: listeEmails.join(', '), // Nodemailer accepte une chaîne avec les e-mails séparés par des virgules
-                    subject: `📄 Compte-rendu audio : ${titreSource || 'Analyse Gemini'}`,
+                    to: listeEmails.join(', '),
+                    subject: `📄 Compte-rendu (${modePdf}) : ${titreSource || 'Analyse Gemini'}`,
                     text: "Bonjour,\n\nVeuillez trouver ci-joint votre compte-rendu PDF généré par l'application.\n\nCordialement,",
                     attachments: [{ 
-                        filename: 'compte-rendu-gemini.pdf', 
-                        content: pdfBuffer // Pas besoin de passer par du Base64, Nodemailer prend le buffer directement !
+                        filename: `compte-rendu-${modePdf}.pdf`, 
+                        content: pdfBuffer 
                     }]
                 };
 
-                // Envoi de l'e-mail
                 await transporter.sendMail(mailOptions);
-                res.json({ success: true, message: "PDF envoyé avec succès à tous les destinataires via Gmail !" });
+                res.json({ success: true, message: "PDF envoyé avec succès à tous les destinataires !" });
 
             } catch (mailError) {
                 console.error("🚨 Erreur d'envoi Nodemailer :", mailError);
@@ -269,15 +270,33 @@ app.post('/envoyer-pdf', verifierToken, async (req, res) => {
             }
         });
 
-        // Dessin du PDF
-        doc.fontSize(20).fillColor('#4f46e5').text('Compte-Rendu Audio - Gemini', { align: 'left' });
-        doc.fontSize(10).fillColor('#64748b').text(`Généré le : ${new Date().toLocaleString()}`, { align: 'left' });
-        doc.moveDown();
-        doc.fontSize(12).fillColor('#334155').text(`Source : ${titreSource || 'Enregistrement audio'}`, { bold: true });
-        doc.moveDown();
-        doc.lineWidth(1).strokeColor('#e2e8f0').moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-        doc.moveDown();
-        doc.fontSize(11).fillColor('#1e293b').text(texteAAfficher, { lineGap: 6, align: 'justify' });
+        // Modèles de mise en page PDF
+        if (modePdf === 'executif') {
+            doc.rect(0, 0, doc.page.width, 90).fill('#0f172a');
+            doc.fontSize(22).fillColor('#38bdf8').text('NOTE DE SYNTHÈSE', 50, 30, { align: 'left' });
+            doc.fontSize(10).fillColor('#94a3b8').text(`Généré le ${new Date().toLocaleDateString()} | Source : ${titreSource}`, 50, 60);
+            doc.moveDown(3);
+            doc.fontSize(14).fillColor('#0f172a').text('Points Clés & Analyse', { underline: true });
+            doc.moveDown(0.5);
+            doc.fontSize(10).fillColor('#334155').text(texteAAfficher, { lineGap: 8, align: 'justify' });
+        } else if (modePdf === 'academique') {
+            doc.fontSize(20).fillColor('#1e1b4b').text('📚 Notes de Cours & Étude', { align: 'center' });
+            doc.fontSize(10).fillColor('#6b7280').text(`Sujet : ${titreSource}`, { align: 'center' });
+            doc.moveDown();
+            doc.lineWidth(2).strokeColor('#4f46e5').moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+            doc.moveDown();
+            doc.fontSize(11).fillColor('#1f2937').text(texteAAfficher, { lineGap: 10, align: 'justify' });
+        } else {
+            doc.fontSize(20).fillColor('#4f46e5').text('Compte-Rendu Audio - Gemini', { align: 'left' });
+            doc.fontSize(10).fillColor('#64748b').text(`Généré le : ${new Date().toLocaleString()}`, { align: 'left' });
+            doc.moveDown();
+            doc.fontSize(12).fillColor('#334155').text(`Source : ${titreSource || 'Enregistrement audio'}`, { bold: true });
+            doc.moveDown();
+            doc.lineWidth(1).strokeColor('#e2e8f0').moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+            doc.moveDown();
+            doc.fontSize(11).fillColor('#1e293b').text(texteAAfficher, { lineGap: 6, align: 'justify' });
+        }
+
         doc.fontSize(8).fillColor('#94a3b8').text('Document généré automatiquement.', 50, 750, { align: 'center', width: 500 });
         doc.end();
 
