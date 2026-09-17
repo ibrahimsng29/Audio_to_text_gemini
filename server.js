@@ -1,3 +1,7 @@
+import dns from 'dns';
+// 🚀 Forcer Node.js à utiliser IPv4 en priorité sur tout le serveur (résout ENETUNREACH sur Render)
+dns.setDefaultResultOrder('ipv4first');
+
 import express from 'express';
 import multer from 'multer';
 import cors from 'cors';
@@ -30,19 +34,21 @@ if (process.env.MONGO_URI) {
         .catch(err => console.error('❌ Erreur MongoDB :', err));
 }
 
-// ✉️ Configuration Nodemailer (Gmail forcé en IPv4 pour Render)
+// ✉️ Configuration Nodemailer IPv4 explicite pour Gmail
 const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 587,
-    secure: false, // STARTTLS
+    secure: false, // STARTTLS sur port 587
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
     },
-    family: 4 // 🚀 Force la connexion en IPv4 pour corriger l'erreur ENETUNREACH sur Render
+    tls: {
+        rejectUnauthorized: false
+    }
 });
 
-// Modèles
+// Modèles MongoDB
 const userSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
@@ -217,7 +223,7 @@ app.post('/traduire', verifierToken, async (req, res) => {
     }
 });
 
-// 🚀 ROUTE PDF AVEC NODEMAILER (IPv4 & Multi-destinataires)
+// 🚀 ROUTE ENVOI PDF AVEC NODEMAILER
 app.post('/envoyer-pdf', verifierToken, async (req, res) => {
     try {
         const body = req.body || {};
