@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Audio-to-Text Gemini | Cyber UI</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <style>
+   <style>
         /* Effet de lueur néon pour les éléments actifs */
         .neon-glow {
             box-shadow: 0 0 25px -5px rgba(99, 102, 241, 0.25);
@@ -23,22 +23,18 @@
             border-radius: 10px;
         }
 
-        /* 📱 RÈGLES RESPONSIVE MOBILE */
+        /* 📱 RÈGLES RESPONSIVE MOBILE & PC */
         @media screen and (max-width: 768px) {
-            /* Masque par défaut la sidebar sur mobile avec transition fluide */
             #sidebar {
-                transform: translateX(-100%);
-                width: 100% !important;
+                width: 80% !important;
                 max-width: 300px;
             }
 
-            /* Réinitialise la marge du contenu principal pour petit écran */
             main {
                 margin-left: 0 !important;
                 padding: 1rem !important;
             }
 
-            /* Réorganisation verticale des zones d'actions et de traduction */
             #actionsContainer, #traductionContainer {
                 flex-direction: column !important;
                 align-items: stretch !important;
@@ -50,7 +46,6 @@
                 flex-direction: column !important;
             }
 
-            /* Adaptation des champs et boutons sur toute la largeur */
             input[type="text"], 
             select, 
             button {
