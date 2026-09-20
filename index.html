@@ -126,7 +126,13 @@
                 <!-- Historique vertical -->
                 <div>
                     <h2 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">📜 Historique récent</h2>
-                    <div id="listeHistorique" class="space-y-2 text-xs overflow-y-auto max-h-[350px] pr-1">
+                    
+                    <!-- 🔍 BARRE DE RECHERCHE DANS L'HISTORIQUE -->
+                    <div class="mb-3">
+                        <input type="text" id="inputRechercheHistorique" placeholder="🔍 Rechercher dans l'historique..." class="w-full bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 shadow-inner">
+                    </div>
+
+                    <div id="listeHistorique" class="space-y-2 text-xs overflow-y-auto max-h-[300px] pr-1">
                         <p id="aucunHistorique" class="text-slate-600 italic text-center py-6">Aucune session enregistrée</p>
                     </div>
                 </div>
@@ -278,6 +284,7 @@
         const statutEmail = document.getElementById('statutEmail');
         const listeHistorique = document.getElementById('listeHistorique');
         const aucunHistorique = document.getElementById('aucunHistorique');
+        const inputRecherche = document.getElementById('inputRechercheHistorique');
 
         // --- GESTION DE L'AUTHENTIFICATION ---
         let modeInscription = false;
@@ -484,7 +491,8 @@
                     const nouvelItem = {
                         id: Date.now(),
                         titre: nomSource,
-                        date: new Date().toLocaleTimeString(),
+                        mode: selectMode.value,
+                        date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                         texte: data.texte,
                         audioUrl: lecteurAudio.src
                     };
@@ -575,7 +583,11 @@
             }
         };
 
-        // --- 🛡️ APPEL API HISTORIQUE AVEC TOKEN ---
+        // --- 🛡️ APPEL API HISTORIQUE AVEC TOKEN & FILTRE ---
+        inputRecherche.addEventListener('input', () => {
+            mettreAJourAffichageHistorique();
+        });
+
         async function chargerHistoriqueDepuisBDD() {
             const token = localStorage.getItem('gemini_token');
             try {
@@ -590,6 +602,7 @@
                     historiqueTranscriptions = data.historique.map(item => ({
                         id: item._id,
                         titre: item.titre,
+                        mode: item.mode || 'resume',
                         date: new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                         texte: item.texte
                     }));
@@ -601,20 +614,52 @@
         }
 
         function mettreAJourAffichageHistorique() {
-            if (historiqueTranscriptions.length === 0) {
+            const termeRecherche = inputRecherche.value.toLowerCase().trim();
+            
+            const historiqueFiltre = historiqueTranscriptions.filter(item => {
+                const dansTitre = item.titre.toLowerCase().includes(termeRecherche);
+                const dansTexte = item.texte.toLowerCase().includes(termeRecherche);
+                return dansTitre || dansTexte;
+            });
+
+            if (historiqueFiltre.length === 0) {
                 aucunHistorique.style.display = "block";
+                aucunHistorique.textContent = termeRecherche ? "Aucun résultat trouvé" : "Aucune session enregistrée";
+                listeHistorique.innerHTML = "";
+                listeHistorique.appendChild(aucunHistorique);
                 return;
             }
+
             aucunHistorique.style.display = "none";
             listeHistorique.innerHTML = "";
 
-            historiqueTranscriptions.forEach(item => {
+            historiqueFiltre.forEach(item => {
+                let badgeTexte = "Résumé";
+                let badgeStyle = "bg-indigo-500/10 text-indigo-400 border-indigo-500/20";
+
+                if (item.mode === 'bullet') {
+                    badgeTexte = "Puces";
+                    badgeStyle = "bg-amber-500/10 text-amber-400 border-amber-500/20";
+                } else if (item.mode === 'todo') {
+                    badgeTexte = "To-Do";
+                    badgeStyle = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+                } else if (item.mode === 'brut') {
+                    badgeTexte = "Brut";
+                    badgeStyle = "bg-slate-500/10 text-slate-400 border-slate-500/20";
+                }
+
                 const divElement = document.createElement('div');
-                divElement.className = "bg-slate-900/60 hover:bg-slate-900 p-3 rounded-2xl border border-slate-800/80 transition cursor-pointer shadow-sm";
+                divElement.className = "bg-slate-900/60 hover:bg-slate-900 p-3 rounded-2xl border border-slate-800/80 transition cursor-pointer shadow-sm flex items-center justify-between gap-2";
                 divElement.innerHTML = `
-                    <div class="font-semibold text-slate-200 truncate text-xs">📌 ${item.titre}</div>
-                    <div class="text-[10px] text-slate-500 mt-1">${item.date}</div>
+                    <div class="overflow-hidden pr-1">
+                        <div class="font-semibold text-slate-200 truncate text-xs">📌 ${item.titre}</div>
+                        <div class="text-[10px] text-slate-500 mt-0.5">${item.date}</div>
+                    </div>
+                    <span class="text-[9px] font-bold px-2 py-0.5 rounded-lg border whitespace-nowrap ${badgeStyle}">
+                        ${badgeTexte}
+                    </span>
                 `;
+
                 divElement.onclick = () => {
                     resDiv.textContent = item.texte;
                     actionsContainer.style.display = "flex";
@@ -622,6 +667,7 @@
                     titreActuel = item.titre;
                     if (item.audioUrl) chargerAudioDansLecteur(item.audioUrl);
                 };
+
                 listeHistorique.appendChild(divElement);
             });
         }

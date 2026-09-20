@@ -174,11 +174,31 @@ app.post('/transcrire', verifierToken, upload.single('audio'), async (req, res) 
     }
 });
 
+// 📜 Route Récupération de l'historique
 app.get('/historique', verifierToken, async (req, res) => {
     try {
-        const historique = await Transcription.find({ userId: req.user.id }).sort({ date: -1 }).limit(20);
+        const historique = await Transcription.find({ userId: req.user.id })
+            .sort({ date: -1 })
+            .limit(30);
         res.json({ success: true, historique });
     } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 🗑️ Route de suppression d'une transcription
+app.delete('/historique/:id', verifierToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const suppression = await Transcription.findOneAndDelete({ _id: id, userId: req.user.id });
+
+        if (!suppression) {
+            return res.status(404).json({ success: false, error: "Transcription introuvable ou non autorisée." });
+        }
+
+        res.json({ success: true, message: "Transcription supprimée avec succès." });
+    } catch (error) {
+        console.error("Erreur suppression :", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -204,7 +224,7 @@ app.post('/traduire', verifierToken, async (req, res) => {
     }
 });
 
-// 🚀 ROUTE ENVOI PDF VIA API REST BREVO (Incompatible avec le blocage SMTP Render)
+// 🚀 ROUTE ENVOI PDF VIA API REST BREVO
 app.post('/envoyer-pdf', verifierToken, async (req, res) => {
     try {
         const body = req.body || {};
@@ -217,7 +237,6 @@ app.post('/envoyer-pdf', verifierToken, async (req, res) => {
             return res.status(400).json({ success: false, error: "Email ou texte manquant." });
         }
 
-        // Découpage des adresses séparées par des virgules ou points-virgules
         const listeEmails = emailDestinataireInput
             .split(/[,;]/)
             .map(e => e.trim())
@@ -227,7 +246,6 @@ app.post('/envoyer-pdf', verifierToken, async (req, res) => {
             return res.status(400).json({ success: false, error: "Aucun email valide fourni." });
         }
 
-        // Formatage pour l'API Brevo : [{ email: 'un@gmail.com' }, { email: 'autre@gmail.com' }]
         const destinatairesBrevo = listeEmails.map(email => ({ email }));
 
         const doc = new PDFDocument({ margin: 50, size: 'A4' });
@@ -240,7 +258,6 @@ app.post('/envoyer-pdf', verifierToken, async (req, res) => {
             const base64Pdf = pdfBuffer.toString('base64');
 
             try {
-                // Appel API REST HTTPS (Port 443 — non filtré par Render)
                 const brevoResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
                     method: 'POST',
                     headers: {
