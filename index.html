@@ -2,16 +2,13 @@
 <html lang="fr" class="dark">
 <head>
     <meta charset="UTF-8">
-    <!-- 🚀 BALISE VIEWPORT : Obligatoire pour adapter la taille sur mobile -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Audio-to-Text Gemini | Cyber UI</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-   <style>
-        /* Effet de lueur néon pour les éléments actifs */
+    <style>
         .neon-glow {
             box-shadow: 0 0 25px -5px rgba(99, 102, 241, 0.25);
         }
-        /* Style de la scrollbar fluide */
         ::-webkit-scrollbar {
             width: 6px;
         }
@@ -23,33 +20,32 @@
             border-radius: 10px;
         }
 
-        /* 📱 RÈGLES RESPONSIVE MOBILE & PC */
-        @media screen and (max-width: 768px) {
-            #sidebar {
-                transform: translateX(-100%);
-                width: 100% !important;
-                max-width: 300px;
-            }
+        /* Animation de glissement fluide pour la sidebar */
+        #sidebar {
+            transition: transform 0.3s ease-in-out;
+        }
 
+        /* Style spécifique mobile quand la sidebar est ouverte */
+        @media screen and (max-width: 768px) {
+            #sidebar.open {
+                transform: translateX(0) !important;
+            }
+            #sidebar:not(.open) {
+                transform: translateX(-100%) !important;
+            }
             main {
                 margin-left: 0 !important;
                 padding: 1rem !important;
             }
-
             #actionsContainer, #traductionContainer {
                 flex-direction: column !important;
                 align-items: stretch !important;
             }
-
-            #actionsContainer > div, 
-            #traductionContainer > div {
+            #actionsContainer > div, #traductionContainer > div {
                 width: 100% !important;
                 flex-direction: column !important;
             }
-
-            input[type="text"], 
-            select, 
-            button {
+            input[type="text"], select, button {
                 width: 100% !important;
             }
         }
@@ -88,7 +84,8 @@
         </button>
 
         <!-- BARRE LATÉRALE À GAUCHE (Glassmorphism) -->
-        <aside id="sidebar" class="w-80 bg-slate-950/80 backdrop-blur-xl border-r border-slate-900/80 p-6 flex flex-col justify-between shadow-2xl h-screen fixed top-0 left-0 z-40 -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out">
+        <!-- BARRE LATÉRALE À GAUCHE -->
+<aside id="sidebar" class="w-80 bg-slate-950/90 backdrop-blur-xl border-r border-slate-900/80 p-6 flex flex-col justify-between shadow-2xl h-screen fixed top-0 left-0 z-40 md:translate-x-0 -translate-x-full">
             <div>
                 <div class="mb-8 pl-12 flex justify-between items-center">
                     <div>
