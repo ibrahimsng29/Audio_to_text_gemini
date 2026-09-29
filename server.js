@@ -20,8 +20,16 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Dossier pour stocker les fichiers audio de façon pérenne sur le disque
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Fichiers statiques
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(__dirname));
+app.use('/uploads', express.static(uploadDir));
 
 if (process.env.MONGO_URI) {
     mongoose.connect(process.env.MONGO_URI)
@@ -42,13 +50,26 @@ const transcriptionSchema = new mongoose.Schema({
     titre: { type: String, default: 'Enregistrement' },
     texte: String,
     mode: String,
+    audioUrl: String,
+    audioPath: String,
     date: { type: Date, default: Date.now }
 });
 const Transcription = mongoose.model('Transcription', transcriptionSchema);
 
-// 🛡️ Limite stricte de 100 Mo pour éviter les crashs
+// 🛡️ Stockage sur disque pour 0 Mo de RAM consommée (Protection Render contre crash OOM)
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname || '') || (file.mimetype.includes('webm') ? '.webm' : '.mp3');
+        cb(null, `audio-${uniqueSuffix}${ext}`);
+    }
+});
+
 const upload = multer({ 
-    storage: multer.memoryStorage(),
+    storage: storage,
     limits: { fileSize: 100 * 1024 * 1024 }, // 100 Mo max
     fileFilter: (req, file, cb) => {
         if (file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/')) {
@@ -138,36 +159,73 @@ app.get('/', (req, res) => {
 });
 
 app.post('/transcrire', verifierToken, upload.single('audio'), async (req, res) => {
+    let uploadedGeminiFile = null;
     try {
         if (!req.file) return res.status(400).json({ success: false, error: "Aucun fichier audio reçu." });
 
         const mode = req.body?.mode || 'resume';
         const titreSource = req.body?.titreSource || 'Enregistrement audio';
-        const audioBase64 = req.file.buffer.toString("base64");
-        let mimeType = req.file.mimetype || 'audio/mp3';
+        const mimeType = req.file.mimetype || 'audio/webm';
+        const audioUrl = `/uploads/${req.file.filename}`;
 
-        let instructionPrompt = "Transcris cet audio en français de manière propre, puis donne un résumé.";
-        if (mode === 'bullet') instructionPrompt = "Transcris cet audio et fais un résumé sous forme de puces.";
-        if (mode === 'todo') instructionPrompt = "Analyse cet audio et extrais la liste des tâches à accomplir.";
-        if (mode === 'brut') instructionPrompt = "Transcris intégralement cet audio sans commentaire.";
+        let instructionPrompt = "Transcris cet audio en français de manière claire et structurée, puis donne un résumé. Conserve fidèlement les termes techniques, acronymes et noms propres. Ignore les longs silences et les bruits parasites.";
+        if (mode === 'cours') instructionPrompt = "Tu es un assistant universitaire expert. Transcris et synthétise ce cours académique. Structure le document avec :\n1. 📖 Plan structuré du cours\n2. 💡 Concepts-clés et définitions essentielles\n3. 📝 Synthèse détaillée des explications\n4. 🎯 Mini-quiz d'auto-évaluation (3 questions clés avec réponses pour réviser).\nConserve scrupuleusement les termes techniques et le jargon académique. Ignore les réverbérations de salle et les silences.";
+        if (mode === 'reunion') instructionPrompt = "Tu es un secrétaire de séance professionnel. Transcris et synthétise cette réunion de travail. Structure le document avec :\n1. 🎯 Ordre du jour et objectifs\n2. 📋 Synthèse des échanges clés\n3. ✅ Décisions actées\n4. 🚀 Matrice d'actions (To-Do) : [Tâche | Responsable | Échéance estimée].\nIgnore les silences, hésitations et réverbérations de pièce.";
+        if (mode === 'bullet') instructionPrompt = "Transcris cet audio et fais un résumé clair sous forme de puces. Conserve fidèlement le vocabulaire technique.";
+        if (mode === 'todo') instructionPrompt = "Analyse cet audio et extrais la liste exhaustive des tâches à accomplir avec leurs priorités. Ignore les digressions et bruits de fond.";
+        if (mode === 'brut') instructionPrompt = "Transcris intégralement cet audio sans aucun commentaire ni ajout. Ignore les segments de silence pur.";
 
-        const response = await ai.models.generateContent({
-            model: 'gemini-3.6-flash',
-            contents: [
-                { inlineData: { mimeType: mimeType, data: audioBase64 } },
-                { text: instructionPrompt }
-            ]
+        // 🚀 Upload vers l'API Files officielle de Google Gemini (0 Mo de RAM consommée)
+        uploadedGeminiFile = await ai.files.upload({
+            file: req.file.path,
+            config: {
+                mimeType: mimeType,
+                displayName: titreSource
+            }
         });
+
+        // 🧠 Modèle robuste avec fallback automatique en cas de pic de charge
+        const modelesTestables = ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-flash-latest'];
+        let response = null;
+        let dernierErreur = null;
+
+        for (const model of modelesTestables) {
+            try {
+                response = await ai.models.generateContent({
+                    model: model,
+                    contents: [
+                        { fileData: { fileUri: uploadedGeminiFile.uri, mimeType: uploadedGeminiFile.mimeType } },
+                        { text: instructionPrompt }
+                    ]
+                });
+                if (response?.text) break;
+            } catch (errMod) {
+                console.warn(`Modèle ${model} indisponible (${errMod.message}), bascule vers le suivant...`);
+                dernierErreur = errMod;
+            }
+        }
+
+        if (!response || !response.text) {
+            throw dernierErreur || new Error("Échec de la génération par les modèles d'IA.");
+        }
 
         const nouvelleSauvegarde = new Transcription({
             userId: req.user.id, 
             titre: titreSource,
             texte: response.text,
-            mode: mode
+            mode: mode,
+            audioUrl: audioUrl,
+            audioPath: req.file.path
         });
         await nouvelleSauvegarde.save();
 
-        res.json({ success: true, texte: response.text, id: nouvelleSauvegarde._id });
+        res.json({ 
+            success: true, 
+            texte: response.text, 
+            id: nouvelleSauvegarde._id,
+            audioUrl: audioUrl 
+        });
+
     } catch (error) {
         console.error("Erreur serveur :", error);
         res.status(500).json({ success: false, error: error.message });
@@ -196,7 +254,14 @@ app.delete('/historique/:id', verifierToken, async (req, res) => {
             return res.status(404).json({ success: false, error: "Transcription introuvable ou non autorisée." });
         }
 
-        res.json({ success: true, message: "Transcription supprimée avec succès." });
+        // 🗑️ Si l'utilisateur supprime la transcription, supprimer aussi le fichier audio associé
+        if (suppression.audioPath && fs.existsSync(suppression.audioPath)) {
+            fs.unlink(suppression.audioPath, (err) => {
+                if (err) console.error("Erreur suppression fichier audio lié :", err);
+            });
+        }
+
+        res.json({ success: true, message: "Transcription et audio supprimés avec succès." });
     } catch (error) {
         console.error("Erreur suppression :", error);
         res.status(500).json({ success: false, error: error.message });
@@ -212,10 +277,21 @@ app.post('/traduire', verifierToken, async (req, res) => {
         if (!texteOriginal || !langueCible) return res.status(400).json({ success: false, error: "Données manquantes." });
 
         const promptTraduction = `Traduis le texte suivant en ${langueCible}. Conserve fidèlement la structure :\n\n${texteOriginal}`;
-        const response = await ai.models.generateContent({
-            model: 'gemini-3.6-flash',
-            contents: [{ text: promptTraduction }]
-        });
+        
+        let response = null;
+        for (const model of ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-flash-latest']) {
+            try {
+                response = await ai.models.generateContent({
+                    model: model,
+                    contents: [{ text: promptTraduction }]
+                });
+                if (response?.text) break;
+            } catch (e) {
+                console.warn(`Traduction avec ${model} a échoué, essai suivant...`);
+            }
+        }
+
+        if (!response?.text) throw new Error("Échec de la traduction.");
 
         res.json({ success: true, texteTraduit: response.text });
     } catch (error) {
