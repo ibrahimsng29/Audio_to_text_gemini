@@ -82,6 +82,36 @@ const verifierToken = (req, res, next) => {
 };
 
 // ==========================================
+// 🔄 SYSTÈME DE RÉESSAI (EXPONENTIAL BACKOFF)
+// ==========================================
+const attendre = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function appelerGeminiAvecReessai(modelName, contents, maxTentatives = 4) {
+    let tentatives = 0;
+    while (tentatives < maxTentatives) {
+        try {
+            if (tentatives > 0) console.log(`Tentative ${tentatives + 1} vers Gemini...`);
+            const response = await ai.models.generateContent({
+                model: modelName,
+                contents: contents
+            });
+            return response;
+        } catch (erreur) {
+            const messageErreur = erreur.message || erreur.toString();
+            if (messageErreur.includes("503") || messageErreur.includes("UNAVAILABLE")) {
+                const tempsAttente = Math.pow(2, tentatives) * 1000;
+                console.log(`Serveur Gemini surchargé (503). Nouvel essai dans ${tempsAttente / 1000} secondes...`);
+                await attendre(tempsAttente);
+                tentatives++;
+            } else {
+                throw erreur; 
+            }
+        }
+    }
+    throw new Error("Échec : L'API Gemini est restée indisponible après plusieurs tentatives.");
+}
+
+// ==========================================
 // 🔐 ROUTES D'AUTHENTIFICATION
 // ==========================================
 app.post('/api/register', async (req, res) => {
@@ -151,13 +181,13 @@ app.post('/transcrire', verifierToken, upload.single('audio'), async (req, res) 
         if (mode === 'todo') instructionPrompt = "Analyse cet audio et extrais la liste des tâches à accomplir.";
         if (mode === 'brut') instructionPrompt = "Transcris intégralement cet audio sans commentaire.";
 
-        const response = await ai.models.generateContent({
-            model: 'gemini-3.6-flash',
-            contents: [
-                { inlineData: { mimeType: mimeType, data: audioBase64 } },
-                { text: instructionPrompt }
-            ]
-        });
+        const contents = [
+            { inlineData: { mimeType: mimeType, data: audioBase64 } },
+            { text: instructionPrompt }
+        ];
+
+        // Appel utilisant la nouvelle fonction avec Exponential Backoff
+        const response = await appelerGeminiAvecReessai('gemini-3.6-flash', contents);
 
         const nouvelleSauvegarde = new Transcription({
             userId: req.user.id, 
@@ -212,6 +242,8 @@ app.post('/traduire', verifierToken, async (req, res) => {
         if (!texteOriginal || !langueCible) return res.status(400).json({ success: false, error: "Données manquantes." });
 
         const promptTraduction = `Traduis le texte suivant en ${langueCible}. Conserve fidèlement la structure :\n\n${texteOriginal}`;
+        
+        // On peut aussi utiliser le réessai ici si besoin, mais je l'ai laissé standard pour l'instant
         const response = await ai.models.generateContent({
             model: 'gemini-3.6-flash',
             contents: [{ text: promptTraduction }]
