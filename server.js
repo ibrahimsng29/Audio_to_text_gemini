@@ -20,8 +20,16 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Dossier pour stocker les fichiers audio de façon pérenne sur le disque
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Fichiers statiques
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(__dirname));
+app.use('/uploads', express.static(uploadDir));
 
 if (process.env.MONGO_URI) {
     mongoose.connect(process.env.MONGO_URI)
@@ -42,13 +50,26 @@ const transcriptionSchema = new mongoose.Schema({
     titre: { type: String, default: 'Enregistrement' },
     texte: String,
     mode: String,
+    audioUrl: String,
+    audioPath: String,
     date: { type: Date, default: Date.now }
 });
 const Transcription = mongoose.model('Transcription', transcriptionSchema);
 
-// 🛡️ Limite stricte de 100 Mo pour éviter les crashs
+// 🛡️ Stockage sur disque pour 0 Mo de RAM consommée (Protection Render contre crash OOM)
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname || '') || (file.mimetype.includes('webm') ? '.webm' : '.mp3');
+        cb(null, `audio-${uniqueSuffix}${ext}`);
+    }
+});
+
 const upload = multer({ 
-    storage: multer.memoryStorage(),
+    storage: storage,
     limits: { fileSize: 100 * 1024 * 1024 }, // 100 Mo max
     fileFilter: (req, file, cb) => {
         if (file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/')) {
@@ -168,6 +189,7 @@ app.get('/', (req, res) => {
 });
 
 app.post('/transcrire', verifierToken, upload.single('audio'), async (req, res) => {
+    let uploadedGeminiFile = null;
     try {
         if (!req.file) return res.status(400).json({ success: false, error: "Aucun fichier audio reçu." });
 
@@ -181,23 +203,31 @@ app.post('/transcrire', verifierToken, upload.single('audio'), async (req, res) 
         if (mode === 'todo') instructionPrompt = "Analyse cet audio et extrais la liste des tâches à accomplir.";
         if (mode === 'brut') instructionPrompt = "Transcris intégralement cet audio sans commentaire.";
 
-        const contents = [
-            { inlineData: { mimeType: mimeType, data: audioBase64 } },
-            { text: instructionPrompt }
-        ];
-
-        // Appel utilisant la nouvelle fonction avec Exponential Backoff
-        const response = await appelerGeminiAvecReessai('gemini-3.6-flash', contents);
+        const response = await ai.models.generateContent({
+            model: 'gemini-3.6-flash',
+            contents: [
+                { inlineData: { mimeType: mimeType, data: audioBase64 } },
+                { text: instructionPrompt }
+            ]
+        });
 
         const nouvelleSauvegarde = new Transcription({
             userId: req.user.id, 
             titre: titreSource,
             texte: response.text,
-            mode: mode
+            mode: mode,
+            audioUrl: audioUrl,
+            audioPath: req.file.path
         });
         await nouvelleSauvegarde.save();
 
-        res.json({ success: true, texte: response.text, id: nouvelleSauvegarde._id });
+        res.json({ 
+            success: true, 
+            texte: response.text, 
+            id: nouvelleSauvegarde._id,
+            audioUrl: audioUrl 
+        });
+
     } catch (error) {
         console.error("Erreur serveur :", error);
         res.status(500).json({ success: false, error: error.message });
@@ -226,7 +256,14 @@ app.delete('/historique/:id', verifierToken, async (req, res) => {
             return res.status(404).json({ success: false, error: "Transcription introuvable ou non autorisée." });
         }
 
-        res.json({ success: true, message: "Transcription supprimée avec succès." });
+        // 🗑️ Si l'utilisateur supprime la transcription, supprimer aussi le fichier audio associé
+        if (suppression.audioPath && fs.existsSync(suppression.audioPath)) {
+            fs.unlink(suppression.audioPath, (err) => {
+                if (err) console.error("Erreur suppression fichier audio lié :", err);
+            });
+        }
+
+        res.json({ success: true, message: "Transcription et audio supprimés avec succès." });
     } catch (error) {
         console.error("Erreur suppression :", error);
         res.status(500).json({ success: false, error: error.message });
@@ -242,8 +279,6 @@ app.post('/traduire', verifierToken, async (req, res) => {
         if (!texteOriginal || !langueCible) return res.status(400).json({ success: false, error: "Données manquantes." });
 
         const promptTraduction = `Traduis le texte suivant en ${langueCible}. Conserve fidèlement la structure :\n\n${texteOriginal}`;
-        
-        // On peut aussi utiliser le réessai ici si besoin, mais je l'ai laissé standard pour l'instant
         const response = await ai.models.generateContent({
             model: 'gemini-3.6-flash',
             contents: [{ text: promptTraduction }]

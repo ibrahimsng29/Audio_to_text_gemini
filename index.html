@@ -106,14 +106,58 @@
                 </div>
 
                 <!-- Type d'analyse -->
-                <div class="mb-6">
+                <div class="mb-4">
                     <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">⚙️ Mode d'intelligence</label>
                     <select id="selectMode" class="w-full bg-slate-900/90 border border-slate-800 rounded-2xl p-3 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 transition cursor-pointer shadow-inner">
                         <option value="resume">📝 Transcription + Résumé</option>
+                        <option value="cours">🎓 Mode Étudiant (Plan + Quiz)</option>
+                        <option value="reunion">💼 Mode Réunion (Décisions + Actions)</option>
                         <option value="bullet">📌 Résumé en puces</option>
                         <option value="todo">🎯 Extraire les tâches (To-Do)</option>
                         <option value="brut">✍️ Transcription brute</option>
                     </select>
+                </div>
+
+                <!-- 📡 PIPELINE DE TRANSMISSION LATÉRALE -->
+                <div id="pipelineContainer" class="mb-5 bg-slate-900/70 p-3.5 rounded-2xl border border-slate-800/80 shadow-inner">
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                            <span id="pipelineIndicatorDot" class="w-2 h-2 rounded-full bg-slate-600 transition-colors"></span>
+                            Pipeline Audio
+                        </h2>
+                        <span id="pipelineGlobalBadge" class="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700/50">En attente</span>
+                    </div>
+
+                    <div class="space-y-2 text-xs font-mono">
+                        <!-- Étape 1 -->
+                        <div id="step1Box" class="p-2 rounded-xl bg-slate-950/40 border border-slate-800/40 transition">
+                            <div class="flex items-center justify-between text-[11px]">
+                                <span class="text-slate-300 flex items-center gap-1.5 font-medium"><span class="text-slate-500">[1]</span> 📤 Téléversement</span>
+                                <span id="step1Status" class="text-[10px] text-slate-500 font-bold">[0%]</span>
+                            </div>
+                            <div class="w-full bg-slate-800/80 h-1.5 rounded-full mt-2 overflow-hidden">
+                                <div id="step1ProgressBar" class="bg-gradient-to-r from-indigo-500 to-purple-500 h-full w-0 transition-all duration-150"></div>
+                            </div>
+                        </div>
+
+                        <!-- Étape 2 -->
+                        <div id="step2Box" class="p-2 rounded-xl bg-slate-950/40 border border-slate-800/40 flex items-center justify-between text-[11px] transition">
+                            <span class="text-slate-400 flex items-center gap-1.5 font-medium"><span class="text-slate-500">[2]</span> 🎧 Nettoyage acoustique</span>
+                            <span id="step2Status" class="text-[10px] text-slate-500 font-bold">[Attente]</span>
+                        </div>
+
+                        <!-- Étape 3 -->
+                        <div id="step3Box" class="p-2 rounded-xl bg-slate-950/40 border border-slate-800/40 flex items-center justify-between text-[11px] transition">
+                            <span class="text-slate-400 flex items-center gap-1.5 font-medium"><span class="text-slate-500">[3]</span> 🧠 Analyse IA & Structuration</span>
+                            <span id="step3Status" class="text-[10px] text-slate-500 font-bold">[Attente]</span>
+                        </div>
+
+                        <!-- Étape 4 -->
+                        <div id="step4Box" class="p-2 rounded-xl bg-slate-950/40 border border-slate-800/40 flex items-center justify-between text-[11px] transition">
+                            <span class="text-slate-400 flex items-center gap-1.5 font-medium"><span class="text-slate-500">[4]</span> 📄 Prêt pour édition</span>
+                            <span id="step4Status" class="text-[10px] text-slate-500 font-bold">[Attente]</span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Historique vertical -->
@@ -192,7 +236,10 @@
                     <div class="flex justify-between items-center mb-4">
                         <div class="flex items-center gap-3">
                             <div class="w-9 h-9 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">✨</div>
-                            <h3 class="text-sm font-bold text-white">Résultat de l'analyse</h3>
+                            <div>
+                                <h3 class="text-sm font-bold text-white">Résultat de l'analyse</h3>
+                                <p id="modeEditionBadge" class="hidden text-[11px] text-emerald-400 font-medium">✏️ Document modifiable : vous pouvez corriger et peaufiner ce texte avant l'export PDF</p>
+                            </div>
                         </div>
                         <button id="btnAnnuler" style="display: none;" class="bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 text-xs font-medium px-3 py-1.5 rounded-xl transition cursor-pointer">
                             ❌ Annuler
@@ -204,8 +251,8 @@
                         <audio id="lecteurAudio" controls class="w-full hidden rounded-xl accent-indigo-500"></audio>
                     </div>
 
-                    <div id="resultat" class="text-slate-300 bg-slate-950/60 border border-slate-900 p-5 rounded-2xl whitespace-pre-wrap min-h-[150px] max-h-[320px] overflow-y-auto text-xs leading-relaxed">
-                        Le texte structuré et les résumés apparaîtront ici...
+                    <div id="resultat" contenteditable="true" spellcheck="false" class="text-slate-300 bg-slate-950/60 border border-slate-900 focus:border-indigo-500/80 focus:ring-1 focus:ring-indigo-500/40 p-5 rounded-2xl whitespace-pre-wrap min-h-[160px] max-h-[380px] overflow-y-auto text-xs leading-relaxed transition outline-none">
+Le texte structuré et les résumés apparaîtront ici...
                     </div>
 
                     <!-- Option de Traduction -->
@@ -278,6 +325,20 @@
         const listeHistorique = document.getElementById('listeHistorique');
         const aucunHistorique = document.getElementById('aucunHistorique');
         const inputRecherche = document.getElementById('inputRechercheHistorique');
+        const modeEditionBadge = document.getElementById('modeEditionBadge');
+
+        // Éléments du Pipeline
+        const pipelineIndicatorDot = document.getElementById('pipelineIndicatorDot');
+        const pipelineGlobalBadge = document.getElementById('pipelineGlobalBadge');
+        const step1Box = document.getElementById('step1Box');
+        const step1Status = document.getElementById('step1Status');
+        const step1ProgressBar = document.getElementById('step1ProgressBar');
+        const step2Box = document.getElementById('step2Box');
+        const step2Status = document.getElementById('step2Status');
+        const step3Box = document.getElementById('step3Box');
+        const step3Status = document.getElementById('step3Status');
+        const step4Box = document.getElementById('step4Box');
+        const step4Status = document.getElementById('step4Status');
 
         // --- GESTION DE L'AUTHENTIFICATION ---
         let modeInscription = false;
@@ -382,18 +443,160 @@
             lecteurAudio.onloadedmetadata = () => { lecteurAudio.currentTime = 0; };
         }
 
+        // --- CONTRÔLEUR DU PIPELINE DE TRANSMISSION LATÉRALE ---
+        let requeteXhr = null;
+
+        function resetPipeline() {
+            if (pipelineIndicatorDot) pipelineIndicatorDot.className = "w-2 h-2 rounded-full bg-slate-600 transition-colors";
+            if (pipelineGlobalBadge) {
+                pipelineGlobalBadge.textContent = "En attente";
+                pipelineGlobalBadge.className = "text-[9px] font-semibold px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700/50";
+            }
+            if (step1Box) step1Box.className = "p-2 rounded-xl bg-slate-950/40 border border-slate-800/40 transition";
+            if (step1Status) {
+                step1Status.textContent = "[0%]";
+                step1Status.className = "text-[10px] text-slate-500 font-bold";
+            }
+            if (step1ProgressBar) step1ProgressBar.style.width = "0%";
+            
+            if (step2Box) step2Box.className = "p-2 rounded-xl bg-slate-950/40 border border-slate-800/40 flex items-center justify-between text-[11px] transition";
+            if (step2Status) {
+                step2Status.textContent = "[Attente]";
+                step2Status.className = "text-[10px] text-slate-500 font-bold";
+            }
+            
+            if (step3Box) step3Box.className = "p-2 rounded-xl bg-slate-950/40 border border-slate-800/40 flex items-center justify-between text-[11px] transition";
+            if (step3Status) {
+                step3Status.textContent = "[Attente]";
+                step3Status.className = "text-[10px] text-slate-500 font-bold";
+            }
+            
+            if (step4Box) step4Box.className = "p-2 rounded-xl bg-slate-950/40 border border-slate-800/40 flex items-center justify-between text-[11px] transition";
+            if (step4Status) {
+                step4Status.textContent = "[Attente]";
+                step4Status.className = "text-[10px] text-slate-500 font-bold";
+            }
+            if (modeEditionBadge) modeEditionBadge.classList.add('hidden');
+        }
+
+        function demarrerPipeline() {
+            resetPipeline();
+            if (pipelineIndicatorDot) pipelineIndicatorDot.className = "w-2 h-2 rounded-full bg-indigo-500 animate-ping";
+            if (pipelineGlobalBadge) {
+                pipelineGlobalBadge.textContent = "En cours...";
+                pipelineGlobalBadge.className = "text-[9px] font-semibold px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-400 border border-indigo-500/30";
+            }
+            if (step1Box) step1Box.className = "p-2 rounded-xl bg-indigo-950/30 border border-indigo-500/40 transition";
+            if (step1Status) {
+                step1Status.textContent = "[0%]";
+                step1Status.className = "text-[10px] text-indigo-400 font-bold";
+            }
+        }
+
+        function actualiserUploadProgress(pourcent) {
+            if (step1ProgressBar) step1ProgressBar.style.width = pourcent + "%";
+            if (step1Status) step1Status.textContent = `[${pourcent}%]`;
+
+            if (pourcent >= 100) {
+                if (step1Status) {
+                    step1Status.textContent = "[OK ✅]";
+                    step1Status.className = "text-[10px] text-emerald-400 font-bold";
+                }
+                if (step1Box) step1Box.className = "p-2 rounded-xl bg-emerald-950/20 border border-emerald-500/30 transition";
+
+                // Étape 2 : Nettoyage acoustique
+                if (step2Box) step2Box.className = "p-2 rounded-xl bg-indigo-950/30 border border-indigo-500/40 flex items-center justify-between text-[11px] transition";
+                if (step2Status) {
+                    step2Status.textContent = "[Filtrage...]";
+                    step2Status.className = "text-[10px] text-indigo-400 font-bold animate-pulse";
+                }
+
+                setTimeout(() => {
+                    if (step2Status) {
+                        step2Status.textContent = "[OK ✅]";
+                        step2Status.className = "text-[10px] text-emerald-400 font-bold";
+                    }
+                    if (step2Box) step2Box.className = "p-2 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex items-center justify-between text-[11px] transition";
+
+                    // Étape 3 : Analyse IA & Structuration
+                    if (step3Box) step3Box.className = "p-2 rounded-xl bg-purple-950/30 border border-purple-500/40 flex items-center justify-between text-[11px] transition";
+                    if (step3Status) {
+                        step3Status.textContent = "[Gemini IA...]";
+                        step3Status.className = "text-[10px] text-purple-400 font-bold animate-pulse";
+                    }
+                }, 500);
+            }
+        }
+
+        function finaliserPipelineSucces() {
+            if (step3Status) {
+                step3Status.textContent = "[OK ✅]";
+                step3Status.className = "text-[10px] text-emerald-400 font-bold";
+            }
+            if (step3Box) step3Box.className = "p-2 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex items-center justify-between text-[11px] transition";
+
+            if (step4Box) step4Box.className = "p-2 rounded-xl bg-emerald-950/30 border border-emerald-500/50 flex items-center justify-between text-[11px] transition shadow-lg shadow-emerald-950/40";
+            if (step4Status) {
+                step4Status.textContent = "[Prêt ! ✨]";
+                step4Status.className = "text-[10px] text-emerald-300 font-black animate-pulse";
+            }
+
+            if (pipelineIndicatorDot) pipelineIndicatorDot.className = "w-2 h-2 rounded-full bg-emerald-500";
+            if (pipelineGlobalBadge) {
+                pipelineGlobalBadge.textContent = "Terminé ✅";
+                pipelineGlobalBadge.className = "text-[9px] font-semibold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+            }
+            if (modeEditionBadge) modeEditionBadge.classList.remove('hidden');
+        }
+
+        function erreurPipeline(message) {
+            if (pipelineIndicatorDot) pipelineIndicatorDot.className = "w-2 h-2 rounded-full bg-rose-500";
+            if (pipelineGlobalBadge) {
+                pipelineGlobalBadge.textContent = "Erreur ❌";
+                pipelineGlobalBadge.className = "text-[9px] font-semibold px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-400 border border-rose-500/30";
+            }
+            if (step3Status) {
+                step3Status.textContent = "[Échec]";
+                step3Status.className = "text-[10px] text-rose-400 font-bold";
+            }
+        }
+
+        function annulerPipeline() {
+            if (pipelineIndicatorDot) pipelineIndicatorDot.className = "w-2 h-2 rounded-full bg-amber-500";
+            if (pipelineGlobalBadge) {
+                pipelineGlobalBadge.textContent = "Annulé ⏹️";
+                pipelineGlobalBadge.className = "text-[9px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-400 border border-amber-500/30";
+            }
+            if (step1Status) step1Status.textContent = "[Annulé]";
+            if (step2Status) step2Status.textContent = "[Annulé]";
+            if (step3Status) step3Status.textContent = "[Annulé]";
+            if (step4Status) step4Status.textContent = "[Annulé]";
+        }
+
         btnAnnuler.onclick = () => {
-            if (controllerRequete) controllerRequete.abort();
+            if (requeteXhr) {
+                requeteXhr.abort();
+                requeteXhr = null;
+            }
             btnAnnuler.style.display = "none";
             statutMicro.textContent = "❌ Annulé.";
             statutFichier.textContent = "❌ Annulé.";
-            resDiv.textContent = "Opération annulée.";
+            resDiv.textContent = "Opération annulée par l'utilisateur.";
+            annulerPipeline();
         };
 
         // --- MICRO ---
         btnEnr.onclick = async () => {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: {
+        echoCancellation: true,      // Supprime l'écho de la pièce
+        noiseSuppression: true,      // Filtre les bruits de fond
+        autoGainControl: true,       // Équilibre les voix fortes et faibles
+        channelCount: 1,             // Mono (divise par 2 la taille du fichier)
+        sampleRate: 16000            // 16 kHz optimal pour la reconnaissance vocale
+                }
+
+                 });
                 mediaRecorder = new MediaRecorder(stream);
                 audioChunks = [];
 
@@ -452,62 +655,85 @@
             envoyerAuServeur(fichier, statutFichier, fichier.name);
         };
 
-        // --- 🛡️ APPEL API TRANSCRIPTION AVEC TOKEN ---
-        async function envoyerAuServeur(audioBlob, elementStatut, nomSource) {
+        // --- 🛡️ APPEL API TRANSCRIPTION AVEC TOKEN & PIPELINE XHR ---
+        function envoyerAuServeur(audioBlob, elementStatut, nomSource) {
             const token = localStorage.getItem('gemini_token');
             const formData = new FormData();
             formData.append('audio', audioBlob, 'audio_file');
             formData.append('mode', selectMode.value);
             titreActuel = nomSource;
 
-            controllerRequete = new AbortController();
+            demarrerPipeline();
 
-            try {
-                const req = await fetch('/transcrire', { 
-                    method: 'POST', 
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    body: formData,
-                    signal: controllerRequete.signal
-                });
-                
-                if (req.status === 401 || req.status === 403) return gererExpirationSession();
-                
-                const data = await req.json();
-                btnAnnuler.style.display = "none";
+            requeteXhr = new XMLHttpRequest();
+            requeteXhr.open('POST', '/transcrire');
+            requeteXhr.setRequestHeader('Authorization', `Bearer ${token}`);
 
-                if (data.success) {
-                    elementStatut.textContent = "✅ Terminé !";
-                    resDiv.textContent = data.texte;
-                    actionsContainer.style.display = "flex";
-                    traductionContainer.style.display = "flex";
-
-                    const nouvelItem = {
-                        id: Date.now(),
-                        titre: nomSource,
-                        mode: selectMode.value,
-                        date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                        texte: data.texte,
-                        audioUrl: lecteurAudio.src
-                    };
-                    historiqueTranscriptions.unshift(nouvelItem);
-                    mettreAJourAffichageHistorique();
-
-                } else {
-                    elementStatut.textContent = "❌ Erreur.";
-                    resDiv.textContent = data.error;
+            // Suivi en direct du téléversement pour l'étape 1
+            requeteXhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const pourcent = Math.round((e.loaded / e.total) * 100);
+                    actualiserUploadProgress(pourcent);
+                    elementStatut.textContent = `⏳ Envoi de l'audio (${pourcent}%)...`;
                 }
-            } catch (err) {
+            };
+
+            requeteXhr.onload = () => {
                 btnAnnuler.style.display = "none";
-                if (err.name !== 'AbortError') {
-                    elementStatut.textContent = "❌ Erreur réseau.";
-                    resDiv.textContent = err.message;
+                if (requeteXhr.status === 401 || requeteXhr.status === 403) {
+                    erreurPipeline();
+                    return gererExpirationSession();
                 }
-            }
+
+                try {
+                    const data = JSON.parse(requeteXhr.responseText);
+                    if (data.success) {
+                        elementStatut.textContent = "✅ Traitement terminé !";
+                        resDiv.textContent = data.texte;
+                        actionsContainer.style.display = "flex";
+                        traductionContainer.style.display = "flex";
+
+                        finaliserPipelineSucces();
+
+                        const nouvelItem = {
+                            id: data.id || Date.now(),
+                            titre: nomSource,
+                            mode: selectMode.value,
+                            date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            texte: data.texte,
+                            audioUrl: data.audioUrl || lecteurAudio.src
+                        };
+                        historiqueTranscriptions.unshift(nouvelItem);
+                        mettreAJourAffichageHistorique();
+                    } else {
+                        elementStatut.textContent = "❌ Erreur.";
+                        resDiv.textContent = data.error || "Erreur de transcription.";
+                        erreurPipeline(data.error);
+                    }
+                } catch (e) {
+                    elementStatut.textContent = "❌ Erreur analyse.";
+                    resDiv.textContent = "Erreur lors du traitement de la réponse du serveur.";
+                    erreurPipeline();
+                }
+            };
+
+            requeteXhr.onerror = () => {
+                btnAnnuler.style.display = "none";
+                elementStatut.textContent = "❌ Erreur réseau.";
+                resDiv.textContent = "Erreur de connexion au serveur.";
+                erreurPipeline();
+            };
+
+            requeteXhr.onabort = () => {
+                annulerPipeline();
+            };
+
+            requeteXhr.send(formData);
         }
 
         // --- 🛡️ APPEL API TRADUCTION AVEC TOKEN ---
         btnTraduire.onclick = async () => {
-            const texteActuel = resDiv.textContent;
+            const texteActuel = (resDiv.innerText || resDiv.textContent).trim();
             const langueCible = selectLangue.value;
             const token = localStorage.getItem('gemini_token');
 
@@ -541,7 +767,7 @@
         // --- 🛡️ APPEL API PDF AVEC TOKEN ---
         btnEnvoyerEmail.onclick = async () => {
             const email = inputEmail.value.trim();
-            const texte = resDiv.textContent;
+            const texte = (resDiv.innerText || resDiv.textContent).trim();
             const token = localStorage.getItem('gemini_token');
 
             if (!email) { alert("Veuillez entrer une adresse e-mail valide."); return; }
@@ -597,7 +823,8 @@
                         titre: item.titre,
                         mode: item.mode || 'resume',
                         date: new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                        texte: item.texte
+                        texte: item.texte,
+                        audioUrl: item.audioUrl || null
                     }));
                     mettreAJourAffichageHistorique();
                 }
@@ -630,7 +857,13 @@
                 let badgeTexte = "Résumé";
                 let badgeStyle = "bg-indigo-500/10 text-indigo-400 border-indigo-500/20";
 
-                if (item.mode === 'bullet') {
+                if (item.mode === 'cours') {
+                    badgeTexte = "Cours";
+                    badgeStyle = "bg-purple-500/10 text-purple-400 border-purple-500/20";
+                } else if (item.mode === 'reunion') {
+                    badgeTexte = "Réunion";
+                    badgeStyle = "bg-blue-500/10 text-blue-400 border-blue-500/20";
+                } else if (item.mode === 'bullet') {
                     badgeTexte = "Puces";
                     badgeStyle = "bg-amber-500/10 text-amber-400 border-amber-500/20";
                 } else if (item.mode === 'todo') {
@@ -658,6 +891,7 @@
                     actionsContainer.style.display = "flex";
                     traductionContainer.style.display = "flex";
                     titreActuel = item.titre;
+                    if (modeEditionBadge) modeEditionBadge.classList.remove('hidden');
                     if (item.audioUrl) chargerAudioDansLecteur(item.audioUrl);
                 };
 
@@ -666,7 +900,8 @@
         }
 
         btnCopier.onclick = () => {
-            navigator.clipboard.writeText(resDiv.textContent).then(() => {
+            const texte = (resDiv.innerText || resDiv.textContent).trim();
+            navigator.clipboard.writeText(texte).then(() => {
                 btnCopier.textContent = "✨ Copié !";
                 setTimeout(() => { btnCopier.textContent = "📋 Copier"; }, 2000);
             });
