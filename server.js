@@ -118,7 +118,7 @@ async function appelerGeminiAvecReessai(modelName, contents, maxTentatives = 4) 
             });
             return response;
         } catch (erreur) {
-            const messageErreur = erreur.message || erreur.toString();
+            const messageErreur = erreur?.message || String(erreur || '');
             if (messageErreur.includes("503") || messageErreur.includes("UNAVAILABLE")) {
                 const tempsAttente = Math.pow(2, tentatives) * 1000;
                 console.log(`Serveur Gemini surchargé (503). Nouvel essai dans ${tempsAttente / 1000} secondes...`);
@@ -189,13 +189,20 @@ app.get('/', (req, res) => {
 });
 
 app.post('/transcrire', verifierToken, upload.single('audio'), async (req, res) => {
-    let uploadedGeminiFile = null;
     try {
-        if (!req.file) return res.status(400).json({ success: false, error: "Aucun fichier audio reçu." });
+        if (!req.file || !req.file.path) {
+            return res.status(400).json({ success: false, error: "Aucun fichier audio reçu." });
+        }
 
         const mode = req.body?.mode || 'resume';
         const titreSource = req.body?.titreSource || 'Enregistrement audio';
-        const audioBase64 = req.file.buffer.toString("base64");
+        
+        // 1. URL publique d'accès à l'audio
+        const audioUrl = `/uploads/${req.file.filename}`;
+
+        // 2. Lecture du fichier enregistré sur le disque
+        const audioBuffer = fs.readFileSync(req.file.path);
+        const audioBase64 = audioBuffer.toString("base64");
         let mimeType = req.file.mimetype || 'audio/mp3';
 
         let instructionPrompt = "Transcris cet audio en français de manière propre, puis donne un résumé.";
@@ -203,18 +210,20 @@ app.post('/transcrire', verifierToken, upload.single('audio'), async (req, res) 
         if (mode === 'todo') instructionPrompt = "Analyse cet audio et extrais la liste des tâches à accomplir.";
         if (mode === 'brut') instructionPrompt = "Transcris intégralement cet audio sans commentaire.";
 
-        const response = await ai.models.generateContent({
-            model: 'gemini-3.6-flash',
-            contents: [
-                { inlineData: { mimeType: mimeType, data: audioBase64 } },
-                { text: instructionPrompt }
-            ]
-        });
+        const contents = [
+            { inlineData: { mimeType: mimeType, data: audioBase64 } },
+            { text: instructionPrompt }
+        ];
 
+        // 3. Execution sécurisée de la requête Gemini avec réessai
+        const response = await appelerGeminiAvecReessai('gemini-3.6-flash', contents);
+        const texteFinal = response?.text || "Aucune transcription générée.";
+
+        // 4. Persistence des données
         const nouvelleSauvegarde = new Transcription({
             userId: req.user.id, 
             titre: titreSource,
-            texte: response.text,
+            texte: texteFinal,
             mode: mode,
             audioUrl: audioUrl,
             audioPath: req.file.path
@@ -223,14 +232,14 @@ app.post('/transcrire', verifierToken, upload.single('audio'), async (req, res) 
 
         res.json({ 
             success: true, 
-            texte: response.text, 
+            texte: texteFinal, 
             id: nouvelleSauvegarde._id,
             audioUrl: audioUrl 
         });
 
     } catch (error) {
         console.error("Erreur serveur :", error);
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ success: false, error: error?.message || String(error) });
     }
 });
 
@@ -279,15 +288,13 @@ app.post('/traduire', verifierToken, async (req, res) => {
         if (!texteOriginal || !langueCible) return res.status(400).json({ success: false, error: "Données manquantes." });
 
         const promptTraduction = `Traduis le texte suivant en ${langueCible}. Conserve fidèlement la structure :\n\n${texteOriginal}`;
-        const response = await ai.models.generateContent({
-            model: 'gemini-3.6-flash',
-            contents: [{ text: promptTraduction }]
-        });
+        
+        const response = await appelerGeminiAvecReessai('gemini-3.6-flash', [{ text: promptTraduction }]);
 
-        res.json({ success: true, texteTraduit: response.text });
+        res.json({ success: true, texteTraduit: response?.text || "" });
     } catch (error) {
         console.error("Erreur traduction :", error);
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ success: false, error: error?.message || String(error) });
     }
 });
 
