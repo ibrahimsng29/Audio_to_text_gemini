@@ -6,7 +6,7 @@ Les résultats sont modifiables, traduisibles et peuvent être envoyés en PDF p
 
 ## Démarrage
 
-Prérequis : Node.js 20 ou plus récent, une base MongoDB (MongoDB Atlas convient).
+Prérequis : Node.js 22 (version LTS, fixée dans package.json), une base MongoDB (MongoDB Atlas convient).
 
 ```bash
 npm install
