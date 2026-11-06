@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Audio-to-Text Gemini | Cyber UI</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3"></script>
     <style>
         .neon-glow {
             box-shadow: 0 0 25px -5px rgba(99, 102, 241, 0.25);
@@ -25,16 +25,9 @@
             transition: transform 0.3s ease-in-out;
         }
 
-        /* Style spécifique mobile quand la sidebar est ouverte */
-        @media screen and (max-width: 768px) {
-            #sidebar.open {
-                transform: translateX(0) !important;
-            }
-            #sidebar:not(.open) {
-                transform: translateX(-100%) !important;
-            }
+        /* Style spécifique mobile (même seuil que le préfixe md: de Tailwind) */
+        @media screen and (max-width: 767px) {
             main {
-                margin-left: 0 !important;
                 padding: 1rem !important;
             }
             #actionsContainer, #traductionContainer {
@@ -45,7 +38,8 @@
                 width: 100% !important;
                 flex-direction: column !important;
             }
-            input[type="text"], select, button {
+            /* Champs et boutons d'action en pleine largeur (sauf le bouton menu et les boutons icônes) */
+            input[type="text"], select, button:not(#btnToggleSidebar):not(.btn-icone) {
                 width: 100% !important;
             }
         }
@@ -58,16 +52,20 @@
         <div class="bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-800 p-8 w-full max-w-md neon-glow">
             <h2 id="auth-title" class="text-2xl font-extrabold text-white text-center mb-6">Connexion</h2>
             
-            <input type="email" id="auth-email" placeholder="Adresse e-mail" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-3 mb-4 text-sm text-slate-300 focus:outline-none focus:border-indigo-500">
-            <input type="password" id="auth-password" placeholder="Mot de passe" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-3 mb-6 text-sm text-slate-300 focus:outline-none focus:border-indigo-500">
+            <form id="auth-form" onsubmit="event.preventDefault(); gererConnexion();">
+            <input type="email" id="auth-email" autocomplete="email" required placeholder="Adresse e-mail" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-3 mb-4 text-sm text-slate-300 focus:outline-none focus:border-indigo-500">
+            <input type="password" id="auth-password" autocomplete="current-password" required placeholder="Mot de passe" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-3 mb-2 text-sm text-slate-300 focus:outline-none focus:border-indigo-500">
             
-            <button onclick="gererConnexion()" id="auth-btn" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-indigo-900/20 cursor-pointer">
+            <p id="auth-password-hint" class="hidden text-[11px] text-slate-500 mb-2">8 caractères minimum.</p>
+            <div class="mb-4"></div>
+            <button type="submit" id="auth-btn" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-indigo-900/20 cursor-pointer">
                 Se connecter
             </button>
+            </form>
             
             <p class="text-center text-slate-400 text-xs mt-6">
                 <span id="auth-switch-text">Pas encore de compte ?</span> 
-                <a href="#" onclick="basculerModeAuth()" id="auth-switch-link" class="text-indigo-400 hover:text-indigo-300 font-semibold transition">S'inscrire</a>
+                <a href="#" onclick="event.preventDefault(); basculerModeAuth()" id="auth-switch-link" class="text-indigo-400 hover:text-indigo-300 font-semibold transition">S'inscrire</a>
             </p>
             <div id="auth-message" class="text-center mt-4 text-sm font-semibold"></div>
         </div>
@@ -84,7 +82,7 @@
         </button>
 
         <!-- 📜 BARRE LATÉRALE À GAUCHE -->
-        <aside id="sidebar" class="w-80 bg-slate-950/95 backdrop-blur-xl border-r border-slate-900/80 p-6 flex flex-col justify-between shadow-2xl h-screen fixed top-0 left-0 z-40 transition-transform duration-300 ease-in-out -translate-x-full md:translate-x-0">
+        <aside id="sidebar" class="w-80 bg-slate-950/95 backdrop-blur-xl border-r border-slate-900/80 p-6 flex flex-col justify-between shadow-2xl h-screen fixed top-0 left-0 z-40 transition-transform duration-300 ease-in-out -translate-x-full">
             <div>
                 <!-- Titre sans le bouton dedans -->
                 <div class="mb-8 pl-12 flex justify-between items-center">
@@ -142,7 +140,7 @@
 
                         <!-- Étape 2 -->
                         <div id="step2Box" class="p-2 rounded-xl bg-slate-950/40 border border-slate-800/40 flex items-center justify-between text-[11px] transition">
-                            <span class="text-slate-400 flex items-center gap-1.5 font-medium"><span class="text-slate-500">[2]</span> 🎧 Nettoyage acoustique</span>
+                            <span class="text-slate-400 flex items-center gap-1.5 font-medium"><span class="text-slate-500">[2]</span> 📥 Réception serveur</span>
                             <span id="step2Status" class="text-[10px] text-slate-500 font-bold">[Attente]</span>
                         </div>
 
@@ -172,6 +170,9 @@
                     <div id="listeHistorique" class="space-y-2 text-xs overflow-y-auto max-h-[300px] pr-1">
                         <p id="aucunHistorique" class="text-slate-600 italic text-center py-6">Aucune session enregistrée</p>
                     </div>
+                    <button id="btnChargerPlus" style="display: none;" class="w-full mt-2 bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-400 text-[11px] font-semibold py-2 rounded-xl transition cursor-pointer">
+                        ⬇️ Charger plus
+                    </button>
                 </div>
             </div>
 
@@ -181,7 +182,7 @@
         </aside>
 
         <!-- CONTENU PRINCIPAL -->
-        <main class="flex-1 p-6 md:p-12 flex flex-col items-center overflow-y-auto ml-0 md:ml-80 transition-all duration-300 w-full">
+        <main id="mainContent" class="flex-1 p-6 md:p-12 flex flex-col items-center overflow-y-auto ml-0 md:ml-80 transition-all duration-300 w-full">
             <div class="max-w-2xl w-full mt-12 md:mt-0">
                 
                 <!-- En-tête avec bouton Déconnexion -->
@@ -264,22 +265,38 @@ Le texte structuré et les résumés apparaîtront ici...
                                 <option value="Allemand">🇩🇪 Allemand</option>
                                 <option value="Arabe">🇸🇦 Arabe</option>
                                 <option value="Italien">🇮🇹 Italien</option>
+                                <option value="Français">🇫🇷 Français</option>
                             </select>
                             <button id="btnTraduire" class="bg-slate-800 hover:bg-slate-700 text-indigo-400 border border-slate-700/60 text-xs font-semibold px-4 py-2 rounded-xl transition cursor-pointer whitespace-nowrap">
                                 🌐 Traduire
                             </button>
                         </div>
-                        <div id="statutTraduction" class="text-xs text-slate-500"></div>
+                        <div class="flex items-center gap-3">
+                            <button id="btnTexteOriginal" style="display: none;" class="bg-slate-800/60 hover:bg-slate-700 text-slate-300 border border-slate-700/60 text-xs font-semibold px-3 py-2 rounded-xl transition cursor-pointer whitespace-nowrap">
+                                ↩️ Texte original
+                            </button>
+                            <div id="statutTraduction" class="text-xs text-slate-500"></div>
+                        </div>
                     </div>
 
                     <!-- Boutons d'actions -->
                     <div id="actionsContainer" style="display: none;" class="mt-4 pt-4 border-t border-slate-800/60 flex flex-wrap items-center justify-between gap-3">
-                        <button id="btnCopier" class="bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-4 py-2.5 rounded-xl transition cursor-pointer border border-slate-700/50">
-                            📋 Copier
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <button id="btnCopier" class="bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-4 py-2.5 rounded-xl transition cursor-pointer border border-slate-700/50">
+                                📋 Copier
+                            </button>
+                            <button id="btnSauvegarder" class="bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 text-xs font-semibold px-4 py-2.5 rounded-xl transition cursor-pointer border border-emerald-500/20 whitespace-nowrap">
+                                💾 Enregistrer
+                            </button>
+                        </div>
 
                         <div class="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0">
-                            <input type="text" id="inputEmail" placeholder="Emails (séparés par virgule)..." class="bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 flex-1 md:w-60">
+                            <select id="selectModelePdf" title="Modèle de PDF" class="bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 cursor-pointer">
+                                <option value="classique">📄 Classique</option>
+                                <option value="executif">💼 Exécutif</option>
+                                <option value="academique">📚 Académique</option>
+                            </select>
+                            <input type="text" id="inputEmail" placeholder="Emails (5 max, séparés par virgule)..." class="bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 flex-1 md:w-60">
                             <button id="btnEnvoyerEmail" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition cursor-pointer whitespace-nowrap shadow-md">
                                 📤 Envoyer PDF
                             </button>
@@ -293,615 +310,756 @@ Le texte structuré et les résumés apparaîtront ici...
     </div>
 
     <script>
-        // --- VARIABLES GLOBALES ---
-        let mediaRecorder, audioChunks = [];
+        // --- ÉTAT GLOBAL ---
+        let mediaRecorder = null, fluxMicro = null, audioChunks = [];
         let historiqueTranscriptions = [];
+        let historiqueEncorePlus = false;
         let titreActuel = "Enregistrement";
-        let blobActuel = null;
-        let controllerRequete = null;
+        let idActuel = null;            // transcription affichée (pour enregistrer les modifications)
+        let texteOriginal = null;       // texte avant traduction
+        let urlAudioActuelle = null;    // URL blob: à libérer
+        let requeteXhr = null;
+        const TEXTE_PAR_DEFAUT = "Le texte structuré et les résumés apparaîtront ici...";
 
         // --- ELEMENTS DOM ---
-        const sidebar = document.getElementById('sidebar');
-        const btnToggleSidebar = document.getElementById('btnToggleSidebar');
-        const selectMode = document.getElementById('selectMode');
-        const btnEnr = document.getElementById('btnEnregistrer');
-        const btnArr = document.getElementById('btnArreter');
-        const statutMicro = document.getElementById('statutMicro');
-        const inputFileAudio = document.getElementById('inputFileAudio');
-        const btnEnvoyerFichier = document.getElementById('btnEnvoyerFichier');
-        const statutFichier = document.getElementById('statutFichier');
-        const resDiv = document.getElementById('resultat');
-        const btnAnnuler = document.getElementById('btnAnnuler');
-        const lecteurAudio = document.getElementById('lecteurAudio');
-        const traductionContainer = document.getElementById('traductionContainer');
-        const selectLangue = document.getElementById('selectLangue');
-        const btnTraduire = document.getElementById('btnTraduire');
-        const statutTraduction = document.getElementById('statutTraduction');
-        const actionsContainer = document.getElementById('actionsContainer');
-        const btnCopier = document.getElementById('btnCopier');
-        const inputEmail = document.getElementById('inputEmail');
-        const btnEnvoyerEmail = document.getElementById('btnEnvoyerEmail');
-        const statutEmail = document.getElementById('statutEmail');
-        const listeHistorique = document.getElementById('listeHistorique');
-        const aucunHistorique = document.getElementById('aucunHistorique');
-        const inputRecherche = document.getElementById('inputRechercheHistorique');
-        const modeEditionBadge = document.getElementById('modeEditionBadge');
+        const $ = (id) => document.getElementById(id);
+        const sidebar = $('sidebar');
+        const mainContent = $('mainContent');
+        const btnToggleSidebar = $('btnToggleSidebar');
+        const selectMode = $('selectMode');
+        const btnEnr = $('btnEnregistrer');
+        const btnArr = $('btnArreter');
+        const statutMicro = $('statutMicro');
+        const inputFileAudio = $('inputFileAudio');
+        const btnEnvoyerFichier = $('btnEnvoyerFichier');
+        const statutFichier = $('statutFichier');
+        const resDiv = $('resultat');
+        const btnAnnuler = $('btnAnnuler');
+        const lecteurAudio = $('lecteurAudio');
+        const traductionContainer = $('traductionContainer');
+        const selectLangue = $('selectLangue');
+        const btnTraduire = $('btnTraduire');
+        const btnTexteOriginal = $('btnTexteOriginal');
+        const statutTraduction = $('statutTraduction');
+        const actionsContainer = $('actionsContainer');
+        const btnCopier = $('btnCopier');
+        const btnSauvegarder = $('btnSauvegarder');
+        const selectModelePdf = $('selectModelePdf');
+        const inputEmail = $('inputEmail');
+        const btnEnvoyerEmail = $('btnEnvoyerEmail');
+        const statutEmail = $('statutEmail');
+        const listeHistorique = $('listeHistorique');
+        const aucunHistorique = $('aucunHistorique');
+        const btnChargerPlus = $('btnChargerPlus');
+        const inputRecherche = $('inputRechercheHistorique');
+        const modeEditionBadge = $('modeEditionBadge');
 
         // Éléments du Pipeline
-        const pipelineIndicatorDot = document.getElementById('pipelineIndicatorDot');
-        const pipelineGlobalBadge = document.getElementById('pipelineGlobalBadge');
-        const step1Box = document.getElementById('step1Box');
-        const step1Status = document.getElementById('step1Status');
-        const step1ProgressBar = document.getElementById('step1ProgressBar');
-        const step2Box = document.getElementById('step2Box');
-        const step2Status = document.getElementById('step2Status');
-        const step3Box = document.getElementById('step3Box');
-        const step3Status = document.getElementById('step3Status');
-        const step4Box = document.getElementById('step4Box');
-        const step4Status = document.getElementById('step4Status');
+        const pipelineIndicatorDot = $('pipelineIndicatorDot');
+        const pipelineGlobalBadge = $('pipelineGlobalBadge');
+        const step1Box = $('step1Box'), step1Status = $('step1Status'), step1ProgressBar = $('step1ProgressBar');
+        const step2Box = $('step2Box'), step2Status = $('step2Status');
+        const step3Box = $('step3Box'), step3Status = $('step3Status');
+        const step4Box = $('step4Box'), step4Status = $('step4Status');
+
+        // --- OUTILS ---
+        const token = () => localStorage.getItem('gemini_token');
+
+        /** fetch avec le jeton ; gère l'expiration de session et les réponses non-JSON. */
+        async function appelApi(url, options = {}) {
+            const headers = { ...(options.headers || {}), 'Authorization': `Bearer ${token()}` };
+            if (options.body && typeof options.body === 'string') headers['Content-Type'] = 'application/json';
+            const response = await fetch(url, { ...options, headers });
+            if (response.status === 401) {
+                gererExpirationSession();
+                throw new Error("Session expirée.");
+            }
+            let data;
+            try { data = await response.json(); }
+            catch { data = { success: false, error: `Réponse inattendue du serveur (${response.status}).` }; }
+            return data;
+        }
+
+        function formaterDate(date) {
+            const d = new Date(date);
+            if (Number.isNaN(d.getTime())) return '';
+            const aujourdhui = new Date().toDateString() === d.toDateString();
+            const heure = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+            return aujourdhui ? `Aujourd'hui, ${heure}` : `${d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}, ${heure}`;
+        }
+
+        function versItemHistorique(item) {
+            return {
+                id: item.id,
+                titre: item.titre || 'Enregistrement',
+                mode: item.mode || 'resume',
+                date: item.date,
+                texte: item.texte || '',
+                aAudio: Boolean(item.aAudio)
+            };
+        }
+
+        function texteResultat() {
+            return (resDiv.innerText || resDiv.textContent).trim();
+        }
+
+        function afficherResultat(texte, { id = null, titre = titreActuel } = {}) {
+            resDiv.textContent = texte;
+            idActuel = id;
+            titreActuel = titre;
+            texteOriginal = null;
+            btnTexteOriginal.style.display = "none";
+            statutTraduction.textContent = "";
+            statutEmail.textContent = "";
+            actionsContainer.style.display = "flex";
+            traductionContainer.style.display = "flex";
+            btnSauvegarder.style.display = id ? "inline-block" : "none";
+            if (modeEditionBadge) modeEditionBadge.classList.remove('hidden');
+        }
 
         // --- GESTION DE L'AUTHENTIFICATION ---
         let modeInscription = false;
 
         function basculerModeAuth() {
             modeInscription = !modeInscription;
-            document.getElementById('auth-title').innerText = modeInscription ? "Créer un compte" : "Connexion";
-            document.getElementById('auth-btn').innerText = modeInscription ? "S'inscrire" : "Se connecter";
-            document.getElementById('auth-switch-text').innerText = modeInscription ? "Déjà un compte ?" : "Pas encore de compte ?";
-            document.getElementById('auth-switch-link').innerText = modeInscription ? "Se connecter" : "S'inscrire";
-            document.getElementById('auth-message').innerText = "";
+            $('auth-title').innerText = modeInscription ? "Créer un compte" : "Connexion";
+            $('auth-btn').innerText = modeInscription ? "S'inscrire" : "Se connecter";
+            $('auth-switch-text').innerText = modeInscription ? "Déjà un compte ?" : "Pas encore de compte ?";
+            $('auth-switch-link').innerText = modeInscription ? "Se connecter" : "S'inscrire";
+            $('auth-password').autocomplete = modeInscription ? "new-password" : "current-password";
+            $('auth-password-hint').classList.toggle('hidden', !modeInscription);
+            $('auth-message').innerText = "";
         }
 
         async function gererConnexion() {
-            const email = document.getElementById('auth-email').value;
-            const password = document.getElementById('auth-password').value;
-            const msgDiv = document.getElementById('auth-message');
-
-            if (!email || !password) {
-                msgDiv.innerText = "Veuillez remplir tous les champs.";
+            const email = $('auth-email').value.trim();
+            const password = $('auth-password').value;
+            const msgDiv = $('auth-message');
+            const erreur = (texte) => {
+                msgDiv.innerText = texte;
                 msgDiv.className = "text-center mt-4 text-sm font-semibold text-rose-400";
-                return;
-            }
+            };
 
-            const endpoint = modeInscription ? '/api/register' : '/api/login';
+            if (!email || !password) return erreur("Veuillez remplir tous les champs.");
+            if (modeInscription && password.length < 8) return erreur("Le mot de passe doit contenir au moins 8 caractères.");
 
+            const btn = $('auth-btn');
+            btn.disabled = true;
             try {
-                const response = await fetch(endpoint, {
+                const response = await fetch(modeInscription ? '/api/register' : '/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, password })
                 });
+                const data = await response.json().catch(() => ({ success: false, error: "Réponse inattendue du serveur." }));
 
-                const data = await response.json();
+                if (!data.success) return erreur(data.error || "Erreur.");
 
-                if (data.success) {
-                    if (modeInscription) {
-                        msgDiv.innerText = "Compte créé ! Veuillez vous connecter.";
-                        msgDiv.className = "text-center mt-4 text-sm font-semibold text-emerald-400";
-                        basculerModeAuth(); 
-                    } else {
-                        localStorage.setItem('gemini_token', data.token);
-                        localStorage.setItem('gemini_email', data.email);
-                        demarrerApplication();
-                    }
+                if (modeInscription) {
+                    basculerModeAuth();
+                    msgDiv.innerText = "Compte créé ! Veuillez vous connecter.";
+                    msgDiv.className = "text-center mt-4 text-sm font-semibold text-emerald-400";
                 } else {
-                    msgDiv.innerText = data.error || "Erreur.";
-                    msgDiv.className = "text-center mt-4 text-sm font-semibold text-rose-400";
+                    localStorage.setItem('gemini_token', data.token);
+                    localStorage.setItem('gemini_email', data.email);
+                    $('auth-password').value = '';
+                    demarrerApplication();
                 }
-            } catch (error) {
-                msgDiv.innerText = "Erreur de connexion au serveur.";
-                msgDiv.className = "text-center mt-4 text-sm font-semibold text-rose-400";
+            } catch {
+                erreur("Erreur de connexion au serveur.");
+            } finally {
+                btn.disabled = false;
             }
         }
 
         function demarrerApplication() {
-            document.getElementById('auth-section').classList.add('hidden');
-            document.getElementById('app-section').classList.remove('hidden');
-            document.getElementById('app-section').classList.add('flex');
-            
+            $('auth-section').classList.add('hidden');
+            $('app-section').classList.remove('hidden');
+            $('app-section').classList.add('flex');
+
             const email = localStorage.getItem('gemini_email') || 'Utilisateur';
-            document.getElementById('profil-email').innerText = email;
-            document.getElementById('avatar-lettre').innerText = email.charAt(0).toUpperCase();
-            
-            const profilDiv = document.getElementById('profil-utilisateur');
+            $('profil-email').innerText = email;
+            $('avatar-lettre').innerText = email.charAt(0).toUpperCase();
+
+            const profilDiv = $('profil-utilisateur');
             profilDiv.classList.remove('hidden');
             profilDiv.classList.add('flex');
 
+            definirSidebar(window.matchMedia('(min-width: 768px)').matches);
             chargerHistoriqueDepuisBDD();
+        }
+
+        /** Remet l'interface à zéro pour que l'utilisateur suivant ne voie rien du précédent. */
+        function reinitialiserEspaceTravail() {
+            if (requeteXhr) { requeteXhr.abort(); requeteXhr = null; }
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.onstop = null;
+                mediaRecorder.stop();
+            }
+            arreterMicro();
+            historiqueTranscriptions = [];
+            historiqueEncorePlus = false;
+            idActuel = null;
+            texteOriginal = null;
+            titreActuel = "Enregistrement";
+            inputRecherche.value = '';
+            inputEmail.value = '';
+            inputFileAudio.value = '';
+            resDiv.textContent = TEXTE_PAR_DEFAUT;
+            actionsContainer.style.display = "none";
+            traductionContainer.style.display = "none";
+            btnAnnuler.style.display = "none";
+            statutMicro.textContent = "En attente de démarrage...";
+            statutFichier.textContent = "En attente d'un fichier...";
+            statutEmail.textContent = "";
+            statutTraduction.textContent = "";
+            viderLecteurAudio();
+            resetPipeline();
+            mettreAJourAffichageHistorique();
         }
 
         function seDeconnecter() {
             localStorage.removeItem('gemini_token');
             localStorage.removeItem('gemini_email');
-            
-            document.getElementById('auth-section').classList.remove('hidden');
-            document.getElementById('app-section').classList.add('hidden');
-            document.getElementById('app-section').classList.remove('flex');
-            
-            const profilDiv = document.getElementById('profil-utilisateur');
+            reinitialiserEspaceTravail();
+
+            $('auth-section').classList.remove('hidden');
+            $('app-section').classList.add('hidden');
+            $('app-section').classList.remove('flex');
+
+            const profilDiv = $('profil-utilisateur');
             profilDiv.classList.add('hidden');
             profilDiv.classList.remove('flex');
 
-            document.getElementById('auth-email').value = '';
-            document.getElementById('auth-password').value = '';
+            $('auth-email').value = '';
+            $('auth-password').value = '';
         }
 
+        let expirationEnCours = false;
         function gererExpirationSession() {
-            alert("Votre session a expiré. Veuillez vous reconnecter.");
+            if (expirationEnCours) return;
+            expirationEnCours = true;
             seDeconnecter();
+            const msgDiv = $('auth-message');
+            msgDiv.innerText = "Votre session a expiré. Veuillez vous reconnecter.";
+            msgDiv.className = "text-center mt-4 text-sm font-semibold text-amber-400";
+            setTimeout(() => { expirationEnCours = false; }, 1000);
         }
 
-        // --- INTERFACE ---
-        btnToggleSidebar.onclick = () => {
-            sidebar.classList.toggle('-translate-x-full');
+        // --- BARRE LATÉRALE (mobile et ordinateur) ---
+        function definirSidebar(ouverte) {
+            sidebar.classList.toggle('-translate-x-full', !ouverte);
+            mainContent.classList.toggle('md:ml-80', ouverte);
+            btnToggleSidebar.setAttribute('aria-expanded', String(ouverte));
+        }
+        const sidebarOuverte = () => !sidebar.classList.contains('-translate-x-full');
+        const estMobile = () => !window.matchMedia('(min-width: 768px)').matches;
+
+        btnToggleSidebar.onclick = () => definirSidebar(!sidebarOuverte());
+        // Sur mobile : un clic en dehors de la barre la referme
+        mainContent.addEventListener('click', () => {
+            if (estMobile() && sidebarOuverte()) definirSidebar(false);
+        });
+
+        // --- LECTEUR AUDIO ---
+        function viderLecteurAudio() {
+            if (urlAudioActuelle) URL.revokeObjectURL(urlAudioActuelle);
+            urlAudioActuelle = null;
+            lecteurAudio.removeAttribute('src');
+            lecteurAudio.load();
+            lecteurAudio.classList.add('hidden');
+        }
+
+        function chargerAudioDansLecteur(blob) {
+            viderLecteurAudio();
+            urlAudioActuelle = URL.createObjectURL(blob);
+            lecteurAudio.src = urlAudioActuelle;
+            lecteurAudio.classList.remove('hidden');
+        }
+
+        /** L'audio est protégé : on le télécharge avec le jeton puis on le lit localement. */
+        async function chargerAudioDepuisServeur(id) {
+            viderLecteurAudio();
+            try {
+                const response = await fetch(`/audio/${encodeURIComponent(id)}`, {
+                    headers: { 'Authorization': `Bearer ${token()}` }
+                });
+                if (response.status === 401) return gererExpirationSession();
+                if (!response.ok || idActuel !== id) return;
+                chargerAudioDansLecteur(await response.blob());
+            } catch (err) {
+                console.error("Erreur chargement audio :", err);
+            }
+        }
+
+        // --- CONTRÔLEUR DU PIPELINE ---
+        const CLASSES = {
+            boxAttente: "p-2 rounded-xl bg-slate-950/40 border border-slate-800/40 flex items-center justify-between text-[11px] transition",
+            boxActive: "p-2 rounded-xl bg-indigo-950/30 border border-indigo-500/40 flex items-center justify-between text-[11px] transition",
+            boxIA: "p-2 rounded-xl bg-purple-950/30 border border-purple-500/40 flex items-center justify-between text-[11px] transition",
+            boxOk: "p-2 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex items-center justify-between text-[11px] transition",
+            statutAttente: "text-[10px] text-slate-500 font-bold",
+            statutOk: "text-[10px] text-emerald-400 font-bold"
         };
 
-        function chargerAudioDansLecteur(blobOuUrl) {
-            const url = typeof blobOuUrl === 'string' ? blobOuUrl : URL.createObjectURL(blobOuUrl);
-            lecteurAudio.src = url;
-            lecteurAudio.classList.remove('hidden');
-            lecteurAudio.onloadedmetadata = () => { lecteurAudio.currentTime = 0; };
+        function etape(box, statut, classeBox, texte, classeStatut) {
+            if (box && classeBox) box.className = classeBox;
+            if (statut) { statut.textContent = texte; statut.className = classeStatut; }
         }
 
-        // --- CONTRÔLEUR DU PIPELINE DE TRANSMISSION LATÉRALE ---
-        let requeteXhr = null;
+        function badgeGlobal(texte, couleurPoint, classeBadge) {
+            if (pipelineIndicatorDot) pipelineIndicatorDot.className = `w-2 h-2 rounded-full ${couleurPoint}`;
+            if (pipelineGlobalBadge) {
+                pipelineGlobalBadge.textContent = texte;
+                pipelineGlobalBadge.className = `text-[9px] font-semibold px-2 py-0.5 rounded-md ${classeBadge}`;
+            }
+        }
 
         function resetPipeline() {
-            if (pipelineIndicatorDot) pipelineIndicatorDot.className = "w-2 h-2 rounded-full bg-slate-600 transition-colors";
-            if (pipelineGlobalBadge) {
-                pipelineGlobalBadge.textContent = "En attente";
-                pipelineGlobalBadge.className = "text-[9px] font-semibold px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700/50";
-            }
-            if (step1Box) step1Box.className = "p-2 rounded-xl bg-slate-950/40 border border-slate-800/40 transition";
-            if (step1Status) {
-                step1Status.textContent = "[0%]";
-                step1Status.className = "text-[10px] text-slate-500 font-bold";
-            }
+            badgeGlobal("En attente", "bg-slate-600 transition-colors", "bg-slate-800 text-slate-400 border border-slate-700/50");
+            etape(step1Box, step1Status, "p-2 rounded-xl bg-slate-950/40 border border-slate-800/40 transition", "[0%]", CLASSES.statutAttente);
             if (step1ProgressBar) step1ProgressBar.style.width = "0%";
-            
-            if (step2Box) step2Box.className = "p-2 rounded-xl bg-slate-950/40 border border-slate-800/40 flex items-center justify-between text-[11px] transition";
-            if (step2Status) {
-                step2Status.textContent = "[Attente]";
-                step2Status.className = "text-[10px] text-slate-500 font-bold";
-            }
-            
-            if (step3Box) step3Box.className = "p-2 rounded-xl bg-slate-950/40 border border-slate-800/40 flex items-center justify-between text-[11px] transition";
-            if (step3Status) {
-                step3Status.textContent = "[Attente]";
-                step3Status.className = "text-[10px] text-slate-500 font-bold";
-            }
-            
-            if (step4Box) step4Box.className = "p-2 rounded-xl bg-slate-950/40 border border-slate-800/40 flex items-center justify-between text-[11px] transition";
-            if (step4Status) {
-                step4Status.textContent = "[Attente]";
-                step4Status.className = "text-[10px] text-slate-500 font-bold";
-            }
+            etape(step2Box, step2Status, CLASSES.boxAttente, "[Attente]", CLASSES.statutAttente);
+            etape(step3Box, step3Status, CLASSES.boxAttente, "[Attente]", CLASSES.statutAttente);
+            etape(step4Box, step4Status, CLASSES.boxAttente, "[Attente]", CLASSES.statutAttente);
             if (modeEditionBadge) modeEditionBadge.classList.add('hidden');
         }
 
         function demarrerPipeline() {
             resetPipeline();
-            if (pipelineIndicatorDot) pipelineIndicatorDot.className = "w-2 h-2 rounded-full bg-indigo-500 animate-ping";
-            if (pipelineGlobalBadge) {
-                pipelineGlobalBadge.textContent = "En cours...";
-                pipelineGlobalBadge.className = "text-[9px] font-semibold px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-400 border border-indigo-500/30";
-            }
-            if (step1Box) step1Box.className = "p-2 rounded-xl bg-indigo-950/30 border border-indigo-500/40 transition";
-            if (step1Status) {
-                step1Status.textContent = "[0%]";
-                step1Status.className = "text-[10px] text-indigo-400 font-bold";
-            }
+            badgeGlobal("En cours...", "bg-indigo-500 animate-ping", "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30");
+            etape(step1Box, step1Status, "p-2 rounded-xl bg-indigo-950/30 border border-indigo-500/40 transition", "[0%]", "text-[10px] text-indigo-400 font-bold");
         }
 
+        let televersementTermine = false;
         function actualiserUploadProgress(pourcent) {
             if (step1ProgressBar) step1ProgressBar.style.width = pourcent + "%";
             if (step1Status) step1Status.textContent = `[${pourcent}%]`;
+            if (pourcent < 100 || televersementTermine) return;
+            televersementTermine = true;
 
-            if (pourcent >= 100) {
-                if (step1Status) {
-                    step1Status.textContent = "[OK ✅]";
-                    step1Status.className = "text-[10px] text-emerald-400 font-bold";
-                }
-                if (step1Box) step1Box.className = "p-2 rounded-xl bg-emerald-950/20 border border-emerald-500/30 transition";
-
-                // Étape 2 : Nettoyage acoustique
-                if (step2Box) step2Box.className = "p-2 rounded-xl bg-indigo-950/30 border border-indigo-500/40 flex items-center justify-between text-[11px] transition";
-                if (step2Status) {
-                    step2Status.textContent = "[Filtrage...]";
-                    step2Status.className = "text-[10px] text-indigo-400 font-bold animate-pulse";
-                }
-
-                setTimeout(() => {
-                    if (step2Status) {
-                        step2Status.textContent = "[OK ✅]";
-                        step2Status.className = "text-[10px] text-emerald-400 font-bold";
-                    }
-                    if (step2Box) step2Box.className = "p-2 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex items-center justify-between text-[11px] transition";
-
-                    // Étape 3 : Analyse IA & Structuration
-                    if (step3Box) step3Box.className = "p-2 rounded-xl bg-purple-950/30 border border-purple-500/40 flex items-center justify-between text-[11px] transition";
-                    if (step3Status) {
-                        step3Status.textContent = "[Gemini IA...]";
-                        step3Status.className = "text-[10px] text-purple-400 font-bold animate-pulse";
-                    }
-                }, 500);
-            }
+            // Le fichier est entièrement reçu par le serveur : l'analyse Gemini commence.
+            etape(step1Box, step1Status, "p-2 rounded-xl bg-emerald-950/20 border border-emerald-500/30 transition", "[OK ✅]", CLASSES.statutOk);
+            etape(step2Box, step2Status, CLASSES.boxOk, "[OK ✅]", CLASSES.statutOk);
+            etape(step3Box, step3Status, CLASSES.boxIA, "[Gemini IA...]", "text-[10px] text-purple-400 font-bold animate-pulse");
         }
 
         function finaliserPipelineSucces() {
-            if (step3Status) {
-                step3Status.textContent = "[OK ✅]";
-                step3Status.className = "text-[10px] text-emerald-400 font-bold";
-            }
-            if (step3Box) step3Box.className = "p-2 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex items-center justify-between text-[11px] transition";
-
-            if (step4Box) step4Box.className = "p-2 rounded-xl bg-emerald-950/30 border border-emerald-500/50 flex items-center justify-between text-[11px] transition shadow-lg shadow-emerald-950/40";
-            if (step4Status) {
-                step4Status.textContent = "[Prêt ! ✨]";
-                step4Status.className = "text-[10px] text-emerald-300 font-black animate-pulse";
-            }
-
-            if (pipelineIndicatorDot) pipelineIndicatorDot.className = "w-2 h-2 rounded-full bg-emerald-500";
-            if (pipelineGlobalBadge) {
-                pipelineGlobalBadge.textContent = "Terminé ✅";
-                pipelineGlobalBadge.className = "text-[9px] font-semibold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
-            }
-            if (modeEditionBadge) modeEditionBadge.classList.remove('hidden');
+            etape(step3Box, step3Status, CLASSES.boxOk, "[OK ✅]", CLASSES.statutOk);
+            etape(step4Box, step4Status, "p-2 rounded-xl bg-emerald-950/30 border border-emerald-500/50 flex items-center justify-between text-[11px] transition shadow-lg shadow-emerald-950/40", "[Prêt ! ✨]", "text-[10px] text-emerald-300 font-black animate-pulse");
+            badgeGlobal("Terminé ✅", "bg-emerald-500", "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30");
         }
 
-        function erreurPipeline(message) {
-            if (pipelineIndicatorDot) pipelineIndicatorDot.className = "w-2 h-2 rounded-full bg-rose-500";
-            if (pipelineGlobalBadge) {
-                pipelineGlobalBadge.textContent = "Erreur ❌";
-                pipelineGlobalBadge.className = "text-[9px] font-semibold px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-400 border border-rose-500/30";
-            }
-            if (step3Status) {
-                step3Status.textContent = "[Échec]";
-                step3Status.className = "text-[10px] text-rose-400 font-bold";
-            }
+        function erreurPipeline() {
+            badgeGlobal("Erreur ❌", "bg-rose-500", "bg-rose-500/20 text-rose-400 border border-rose-500/30");
+            etape(step3Box, step3Status, null, "[Échec]", "text-[10px] text-rose-400 font-bold");
         }
 
         function annulerPipeline() {
-            if (pipelineIndicatorDot) pipelineIndicatorDot.className = "w-2 h-2 rounded-full bg-amber-500";
-            if (pipelineGlobalBadge) {
-                pipelineGlobalBadge.textContent = "Annulé ⏹️";
-                pipelineGlobalBadge.className = "text-[9px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-400 border border-amber-500/30";
-            }
-            if (step1Status) step1Status.textContent = "[Annulé]";
-            if (step2Status) step2Status.textContent = "[Annulé]";
-            if (step3Status) step3Status.textContent = "[Annulé]";
-            if (step4Status) step4Status.textContent = "[Annulé]";
+            badgeGlobal("Annulé ⏹️", "bg-amber-500", "bg-amber-500/20 text-amber-400 border border-amber-500/30");
+            [step1Status, step2Status, step3Status, step4Status].forEach(s => { if (s) s.textContent = "[Annulé]"; });
+        }
+
+        function verrouillerEnvoi(verrouiller) {
+            btnEnvoyerFichier.disabled = verrouiller;
+            btnEnvoyerFichier.classList.toggle('opacity-50', verrouiller);
+            if (!mediaRecorder || mediaRecorder.state === 'inactive') btnEnr.disabled = verrouiller;
         }
 
         btnAnnuler.onclick = () => {
             if (requeteXhr) {
-                requeteXhr.abort();
+                requeteXhr.abort();   // le serveur détecte la coupure et n'enregistre rien
                 requeteXhr = null;
             }
             btnAnnuler.style.display = "none";
             statutMicro.textContent = "❌ Annulé.";
             statutFichier.textContent = "❌ Annulé.";
             resDiv.textContent = "Opération annulée par l'utilisateur.";
+            verrouillerEnvoi(false);
             annulerPipeline();
         };
 
         // --- MICRO ---
-        btnEnr.onclick = async () => {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: {
-        echoCancellation: true,      // Supprime l'écho de la pièce
-        noiseSuppression: true,      // Filtre les bruits de fond
-        autoGainControl: true,       // Équilibre les voix fortes et faibles
-        channelCount: 1,             // Mono (divise par 2 la taille du fichier)
-        sampleRate: 16000            // 16 kHz optimal pour la reconnaissance vocale
-                }
+        function choisirFormatEnregistrement() {
+            const candidats = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+            return candidats.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
+        }
 
-                 });
-                mediaRecorder = new MediaRecorder(stream);
+        function extensionPour(mime) {
+            if (mime.includes('mp4')) return 'm4a';
+            if (mime.includes('ogg')) return 'ogg';
+            return 'webm';
+        }
+
+        function arreterMicro() {
+            if (fluxMicro) fluxMicro.getTracks().forEach(piste => piste.stop());
+            fluxMicro = null;
+        }
+
+        function reinitialiserBoutonsMicro() {
+            btnArr.disabled = true;
+            btnEnr.disabled = false;
+            btnEnr.textContent = "🔴 Enregistrer";
+            btnEnr.classList.remove('opacity-50', 'animate-pulse');
+        }
+
+        btnEnr.onclick = async () => {
+            if (!window.MediaRecorder || !navigator.mediaDevices?.getUserMedia) {
+                alert("L'enregistrement audio n'est pas pris en charge par ce navigateur.");
+                return;
+            }
+            try {
+                fluxMicro = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,      // Supprime l'écho de la pièce
+                        noiseSuppression: true,      // Filtre les bruits de fond
+                        autoGainControl: true,       // Équilibre les voix fortes et faibles
+                        channelCount: 1              // Mono (divise par 2 la taille du fichier)
+                    }
+                });
+                const format = choisirFormatEnregistrement();
+                mediaRecorder = format ? new MediaRecorder(fluxMicro, { mimeType: format }) : new MediaRecorder(fluxMicro);
                 audioChunks = [];
 
-                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                mediaRecorder.onstop = async () => {
-                    statutMicro.textContent = "⏳ Analyse en cours...";
-                    resDiv.textContent = "🔄 Traitement audio...";
-                    actionsContainer.style.display = "none";
-                    traductionContainer.style.display = "none";
-                    btnAnnuler.style.display = "inline-block";
-                    
-                    blobActuel = new Blob(audioChunks, { type: 'audio/webm' });
-                    chargerAudioDansLecteur(blobActuel);
-
-                    envoyerAuServeur(blobActuel, statutMicro, "Enregistrement Micro");
+                mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) audioChunks.push(e.data); };
+                mediaRecorder.onstop = () => {
+                    arreterMicro();   // éteint le micro (et le voyant du navigateur)
+                    // Type réel produit par le navigateur (audio/mp4 sur Safari/iOS, audio/webm ailleurs)
+                    const mime = (mediaRecorder.mimeType || audioChunks[0]?.type || 'audio/webm').split(';')[0];
+                    const blob = new Blob(audioChunks, { type: mime });
+                    if (blob.size === 0) {
+                        statutMicro.textContent = "❌ Aucun son enregistré.";
+                        return;
+                    }
+                    const date = new Date().toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                    envoyerAuServeur(blob, `enregistrement.${extensionPour(mime)}`, statutMicro, `Enregistrement micro du ${date}`);
                 };
 
-                mediaRecorder.start();
+                mediaRecorder.start(1000);
                 btnEnr.disabled = true;
                 btnEnr.textContent = "Enregistrement...";
                 btnEnr.classList.add('opacity-50', 'animate-pulse');
                 btnArr.disabled = false;
                 statutMicro.textContent = "Parlez...";
             } catch (e) {
+                arreterMicro();
                 alert("Erreur micro : " + e.message);
             }
         };
 
         btnArr.onclick = () => {
-            if (mediaRecorder) {
-                mediaRecorder.stop();
-                btnArr.disabled = true;
-                btnEnr.disabled = false;
-                btnEnr.textContent = "🔴 Enregistrer";
-                btnEnr.classList.remove('opacity-50', 'animate-pulse');
-            }
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+            reinitialiserBoutonsMicro();
         };
 
         // --- FICHIER LOCAL ---
-        btnEnvoyerFichier.onclick = async () => {
+        const TAILLE_MAX = 100 * 1024 * 1024;
+
+        btnEnvoyerFichier.onclick = () => {
             const fichier = inputFileAudio.files[0];
             if (!fichier) {
                 alert("Veuillez sélectionner un fichier audio !");
                 return;
             }
-
-            statutFichier.textContent = "⏳ Analyse du fichier...";
-            resDiv.textContent = "🔄 Traitement du fichier...";
-            actionsContainer.style.display = "none";
-            traductionContainer.style.display = "none";
-            btnAnnuler.style.display = "inline-block";
-            
-            blobActuel = fichier;
-            chargerAudioDansLecteur(blobActuel);
-            
-            envoyerAuServeur(fichier, statutFichier, fichier.name);
+            if (fichier.size > TAILLE_MAX) {
+                statutFichier.textContent = "❌ Fichier trop volumineux (100 Mo maximum).";
+                return;
+            }
+            envoyerAuServeur(fichier, fichier.name, statutFichier, fichier.name);
         };
 
         // --- 🛡️ APPEL API TRANSCRIPTION AVEC TOKEN & PIPELINE XHR ---
-        function envoyerAuServeur(audioBlob, elementStatut, nomSource) {
-            const token = localStorage.getItem('gemini_token');
-            const formData = new FormData();
-            formData.append('audio', audioBlob, 'audio_file');
-            formData.append('mode', selectMode.value);
-            titreActuel = nomSource;
+        function envoyerAuServeur(audioBlob, nomFichier, elementStatut, titre) {
+            if (requeteXhr) return;   // une analyse à la fois
 
+            elementStatut.textContent = "⏳ Envoi de l'audio...";
+            resDiv.textContent = "🔄 Traitement audio...";
+            actionsContainer.style.display = "none";
+            traductionContainer.style.display = "none";
+            btnAnnuler.style.display = "inline-block";
+            idActuel = null;
+            chargerAudioDansLecteur(audioBlob);
+            verrouillerEnvoi(true);
+
+            const formData = new FormData();
+            formData.append('mode', selectMode.value);
+            formData.append('titreSource', titre);
+            formData.append('audio', audioBlob, nomFichier);   // en dernier : les champs texte arrivent avant le fichier
+
+            televersementTermine = false;
             demarrerPipeline();
 
-            requeteXhr = new XMLHttpRequest();
-            requeteXhr.open('POST', '/transcrire');
-            requeteXhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            const xhr = new XMLHttpRequest();
+            requeteXhr = xhr;
+            xhr.open('POST', '/transcrire');
+            xhr.setRequestHeader('Authorization', `Bearer ${token()}`);
 
-            // Suivi en direct du téléversement pour l'étape 1
-            requeteXhr.upload.onprogress = (e) => {
-                if (e.lengthComputable) {
-                    const pourcent = Math.round((e.loaded / e.total) * 100);
-                    actualiserUploadProgress(pourcent);
-                    elementStatut.textContent = `⏳ Envoi de l'audio (${pourcent}%)...`;
-                }
+            xhr.upload.onprogress = (e) => {
+                if (!e.lengthComputable) return;
+                const pourcent = Math.round((e.loaded / e.total) * 100);
+                actualiserUploadProgress(pourcent);
+                elementStatut.textContent = pourcent < 100 ? `⏳ Envoi de l'audio (${pourcent}%)...` : "⏳ Analyse par Gemini...";
             };
 
-            requeteXhr.onload = () => {
+            const terminer = () => {
+                if (requeteXhr === xhr) requeteXhr = null;
                 btnAnnuler.style.display = "none";
-                if (requeteXhr.status === 401 || requeteXhr.status === 403) {
+                verrouillerEnvoi(false);
+            };
+
+            xhr.onload = () => {
+                terminer();
+                if (xhr.status === 401) {
                     erreurPipeline();
                     return gererExpirationSession();
                 }
 
-                try {
-                    const data = JSON.parse(requeteXhr.responseText);
-                    if (data.success) {
-                        elementStatut.textContent = "✅ Traitement terminé !";
-                        resDiv.textContent = data.texte;
-                        actionsContainer.style.display = "flex";
-                        traductionContainer.style.display = "flex";
+                let data;
+                try { data = JSON.parse(xhr.responseText); }
+                catch { data = { success: false, error: `Réponse inattendue du serveur (${xhr.status}).` }; }
 
-                        finaliserPipelineSucces();
-
-                        const nouvelItem = {
-                            id: data.id || Date.now(),
-                            titre: nomSource,
-                            mode: selectMode.value,
-                            date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                            texte: data.texte,
-                            audioUrl: data.audioUrl || lecteurAudio.src
-                        };
-                        historiqueTranscriptions.unshift(nouvelItem);
-                        mettreAJourAffichageHistorique();
-                    } else {
-                        elementStatut.textContent = "❌ Erreur.";
-                        resDiv.textContent = data.error || "Erreur de transcription.";
-                        erreurPipeline(data.error);
-                    }
-                } catch (e) {
-                    elementStatut.textContent = "❌ Erreur analyse.";
-                    resDiv.textContent = "Erreur lors du traitement de la réponse du serveur.";
+                if (data.success) {
+                    elementStatut.textContent = "✅ Traitement terminé !";
+                    finaliserPipelineSucces();
+                    const nouvelItem = versItemHistorique(data);
+                    afficherResultat(nouvelItem.texte, { id: nouvelItem.id, titre: nouvelItem.titre });
+                    historiqueTranscriptions.unshift(nouvelItem);
+                    mettreAJourAffichageHistorique();
+                } else {
+                    elementStatut.textContent = "❌ Erreur.";
+                    resDiv.textContent = data.error || "Erreur de transcription.";
                     erreurPipeline();
                 }
             };
 
-            requeteXhr.onerror = () => {
-                btnAnnuler.style.display = "none";
+            xhr.onerror = () => {
+                terminer();
                 elementStatut.textContent = "❌ Erreur réseau.";
                 resDiv.textContent = "Erreur de connexion au serveur.";
                 erreurPipeline();
             };
 
-            requeteXhr.onabort = () => {
+            xhr.onabort = () => {
+                terminer();
                 annulerPipeline();
             };
 
-            requeteXhr.send(formData);
+            xhr.send(formData);
         }
 
-        // --- 🛡️ APPEL API TRADUCTION AVEC TOKEN ---
+        // --- 🛡️ TRADUCTION ---
         btnTraduire.onclick = async () => {
-            const texteActuel = (resDiv.innerText || resDiv.textContent).trim();
+            const texteActuel = texteResultat();
             const langueCible = selectLangue.value;
-            const token = localStorage.getItem('gemini_token');
+            if (!texteActuel || texteActuel === TEXTE_PAR_DEFAUT) return;
 
-            if (!texteActuel || texteActuel.startsWith("Le texte")) return;
             statutTraduction.textContent = "⏳ Traduction...";
-
+            btnTraduire.disabled = true;
             try {
-                const response = await fetch('/traduire', {
+                const data = await appelApi('/traduire', {
                     method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ texteOriginal: texteActuel, langueCible: langueCible })
+                    body: JSON.stringify({ texteOriginal: texteActuel, langueCible })
                 });
-
-                if (response.status === 401 || response.status === 403) return gererExpirationSession();
-
-                const data = await response.json();
                 if (data.success) {
+                    if (texteOriginal === null) texteOriginal = texteActuel;   // on garde la version d'origine
                     resDiv.textContent = data.texteTraduit;
+                    resDiv.dir = langueCible === 'Arabe' ? 'rtl' : 'ltr';
+                    btnTexteOriginal.style.display = "inline-block";
                     statutTraduction.textContent = `✅ En ${langueCible}`;
                 } else {
-                    statutTraduction.textContent = "❌ Erreur";
+                    statutTraduction.textContent = "❌ " + (data.error || "Erreur");
                 }
             } catch (err) {
-                statutTraduction.textContent = "❌ Erreur réseau";
+                if (token()) statutTraduction.textContent = "❌ Erreur réseau";
+            } finally {
+                btnTraduire.disabled = false;
             }
         };
 
-        // --- 🛡️ APPEL API PDF AVEC TOKEN ---
+        btnTexteOriginal.onclick = () => {
+            if (texteOriginal === null) return;
+            resDiv.textContent = texteOriginal;
+            resDiv.dir = 'ltr';
+            texteOriginal = null;
+            btnTexteOriginal.style.display = "none";
+            statutTraduction.textContent = "";
+        };
+
+        // --- 💾 ENREGISTRER LES MODIFICATIONS ---
+        btnSauvegarder.onclick = async () => {
+            if (!idActuel) return;
+            const texte = texteResultat();
+            if (!texte) return;
+            const libelle = btnSauvegarder.textContent;
+            btnSauvegarder.disabled = true;
+            try {
+                const data = await appelApi(`/historique/${encodeURIComponent(idActuel)}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ texte })
+                });
+                if (data.success) {
+                    const item = historiqueTranscriptions.find(i => i.id === idActuel);
+                    if (item) item.texte = texte;
+                    texteOriginal = null;
+                    btnTexteOriginal.style.display = "none";
+                    btnSauvegarder.textContent = "✅ Enregistré";
+                } else {
+                    btnSauvegarder.textContent = "❌ Échec";
+                    alert(data.error || "Impossible d'enregistrer.");
+                }
+            } catch {
+                btnSauvegarder.textContent = "❌ Échec";
+            } finally {
+                btnSauvegarder.disabled = false;
+                setTimeout(() => { btnSauvegarder.textContent = libelle.trim(); }, 2000);
+            }
+        };
+
+        // --- 🛡️ ENVOI DU PDF ---
         btnEnvoyerEmail.onclick = async () => {
             const email = inputEmail.value.trim();
-            const texte = (resDiv.innerText || resDiv.textContent).trim();
-            const token = localStorage.getItem('gemini_token');
+            const texte = texteResultat();
+            const erreur = (msg) => {
+                statutEmail.textContent = "❌ " + msg;
+                statutEmail.className = "text-xs font-medium mt-2 text-right text-rose-400";
+            };
 
-            if (!email) { alert("Veuillez entrer une adresse e-mail valide."); return; }
+            if (!email) return erreur("Veuillez entrer au moins une adresse e-mail.");
+            if (!texte || texte === TEXTE_PAR_DEFAUT) return erreur("Aucun texte à envoyer.");
 
             statutEmail.textContent = "⏳ Envoi du PDF...";
             statutEmail.className = "text-xs font-medium mt-2 text-right text-indigo-400";
+            btnEnvoyerEmail.disabled = true;
 
             try {
-                const response = await fetch('/envoyer-pdf', {
+                const data = await appelApi('/envoyer-pdf', {
                     method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ emailDestinataire: email, texteAAfficher: texte, titreSource: titreActuel })
+                    body: JSON.stringify({
+                        emailDestinataire: email,
+                        texteAAfficher: texte,
+                        titreSource: titreActuel,
+                        modePdf: selectModelePdf.value
+                    })
                 });
-
-                if (response.status === 401 || response.status === 403) return gererExpirationSession();
-
-                const data = await response.json();
-
                 if (data.success) {
-                    statutEmail.textContent = "✅ PDF envoyé avec succès !";
+                    statutEmail.textContent = "✅ " + (data.message || "PDF envoyé avec succès !");
                     statutEmail.className = "text-xs font-medium mt-2 text-right text-emerald-400";
                 } else {
-                    statutEmail.textContent = "❌ Erreur : " + data.error;
-                    statutEmail.className = "text-xs font-medium mt-2 text-right text-rose-400";
+                    erreur(data.error || "Échec de l'envoi.");
                 }
-            } catch (err) {
-                statutEmail.textContent = "❌ Erreur réseau.";
-                statutEmail.className = "text-xs font-medium mt-2 text-right text-rose-400";
+            } catch {
+                if (token()) erreur("Erreur réseau.");
+            } finally {
+                btnEnvoyerEmail.disabled = false;
             }
         };
 
-        // --- 🛡️ APPEL API HISTORIQUE AVEC TOKEN & FILTRE ---
-        inputRecherche.addEventListener('input', () => {
-            mettreAJourAffichageHistorique();
-        });
+        // --- 📜 HISTORIQUE ---
+        inputRecherche.addEventListener('input', mettreAJourAffichageHistorique);
 
-        async function chargerHistoriqueDepuisBDD() {
-            const token = localStorage.getItem('gemini_token');
+        async function chargerHistoriqueDepuisBDD(suite = false) {
             try {
-                const response = await fetch('/historique', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
-                if (response.status === 401 || response.status === 403) return seDeconnecter();
-
-                const data = await response.json();
-                if (data.success && data.historique.length > 0) {
-                    historiqueTranscriptions = data.historique.map(item => ({
-                        id: item._id,
-                        titre: item.titre,
-                        mode: item.mode || 'resume',
-                        date: new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                        texte: item.texte,
-                        audioUrl: item.audioUrl || null
-                    }));
-                    mettreAJourAffichageHistorique();
+                let url = '/historique';
+                if (suite && historiqueTranscriptions.length > 0) {
+                    const dernier = historiqueTranscriptions[historiqueTranscriptions.length - 1];
+                    url += `?avant=${encodeURIComponent(new Date(dernier.date).toISOString())}`;
                 }
+                const data = await appelApi(url);
+                if (!data.success) return;
+
+                const elements = data.historique.map(versItemHistorique);
+                historiqueTranscriptions = suite ? historiqueTranscriptions.concat(elements) : elements;
+                historiqueEncorePlus = Boolean(data.encorePlus);
+                mettreAJourAffichageHistorique();
             } catch (err) {
-                console.error("Erreur chargement BDD:", err);
+                console.error("Erreur chargement historique :", err);
+            }
+        }
+
+        btnChargerPlus.onclick = () => chargerHistoriqueDepuisBDD(true);
+
+        const BADGES = {
+            resume: ["Résumé", "bg-indigo-500/10 text-indigo-400 border-indigo-500/20"],
+            cours: ["Cours", "bg-purple-500/10 text-purple-400 border-purple-500/20"],
+            reunion: ["Réunion", "bg-blue-500/10 text-blue-400 border-blue-500/20"],
+            bullet: ["Puces", "bg-amber-500/10 text-amber-400 border-amber-500/20"],
+            todo: ["To-Do", "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"],
+            brut: ["Brut", "bg-slate-500/10 text-slate-400 border-slate-500/20"]
+        };
+
+        function element(tag, classe, texte) {
+            const el = document.createElement(tag);
+            if (classe) el.className = classe;
+            if (texte !== undefined) el.textContent = texte;   // textContent : aucun HTML interprété (anti-XSS)
+            return el;
+        }
+
+        async function supprimerTranscription(item) {
+            if (!confirm(`Supprimer « ${item.titre} » et son audio ? Cette action est définitive.`)) return;
+            try {
+                const data = await appelApi(`/historique/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+                if (!data.success) return alert(data.error || "Suppression impossible.");
+                historiqueTranscriptions = historiqueTranscriptions.filter(i => i.id !== item.id);
+                if (idActuel === item.id) {
+                    idActuel = null;
+                    resDiv.textContent = TEXTE_PAR_DEFAUT;
+                    actionsContainer.style.display = "none";
+                    traductionContainer.style.display = "none";
+                    viderLecteurAudio();
+                }
+                mettreAJourAffichageHistorique();
+            } catch (err) {
+                console.error("Erreur suppression :", err);
             }
         }
 
         function mettreAJourAffichageHistorique() {
             const termeRecherche = inputRecherche.value.toLowerCase().trim();
-            
-            const historiqueFiltre = historiqueTranscriptions.filter(item => {
-                const dansTitre = item.titre.toLowerCase().includes(termeRecherche);
-                const dansTexte = item.texte.toLowerCase().includes(termeRecherche);
-                return dansTitre || dansTexte;
-            });
+            const historiqueFiltre = historiqueTranscriptions.filter(item =>
+                item.titre.toLowerCase().includes(termeRecherche) || item.texte.toLowerCase().includes(termeRecherche)
+            );
+
+            listeHistorique.replaceChildren();
+            btnChargerPlus.style.display = historiqueEncorePlus && !termeRecherche ? "block" : "none";
 
             if (historiqueFiltre.length === 0) {
                 aucunHistorique.style.display = "block";
                 aucunHistorique.textContent = termeRecherche ? "Aucun résultat trouvé" : "Aucune session enregistrée";
-                listeHistorique.innerHTML = "";
                 listeHistorique.appendChild(aucunHistorique);
                 return;
             }
-
             aucunHistorique.style.display = "none";
-            listeHistorique.innerHTML = "";
 
             historiqueFiltre.forEach(item => {
-                let badgeTexte = "Résumé";
-                let badgeStyle = "bg-indigo-500/10 text-indigo-400 border-indigo-500/20";
+                const [badgeTexte, badgeStyle] = BADGES[item.mode] || BADGES.resume;
 
-                if (item.mode === 'cours') {
-                    badgeTexte = "Cours";
-                    badgeStyle = "bg-purple-500/10 text-purple-400 border-purple-500/20";
-                } else if (item.mode === 'reunion') {
-                    badgeTexte = "Réunion";
-                    badgeStyle = "bg-blue-500/10 text-blue-400 border-blue-500/20";
-                } else if (item.mode === 'bullet') {
-                    badgeTexte = "Puces";
-                    badgeStyle = "bg-amber-500/10 text-amber-400 border-amber-500/20";
-                } else if (item.mode === 'todo') {
-                    badgeTexte = "To-Do";
-                    badgeStyle = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-                } else if (item.mode === 'brut') {
-                    badgeTexte = "Brut";
-                    badgeStyle = "bg-slate-500/10 text-slate-400 border-slate-500/20";
-                }
+                const ligne = element('div', "bg-slate-900/60 hover:bg-slate-900 p-3 rounded-2xl border border-slate-800/80 transition cursor-pointer shadow-sm flex items-center justify-between gap-2");
+                const infos = element('div', "overflow-hidden pr-1 min-w-0");
+                infos.append(
+                    element('div', "font-semibold text-slate-200 truncate text-xs", `📌 ${item.titre}`),
+                    element('div', "text-[10px] text-slate-500 mt-0.5", formaterDate(item.date))
+                );
+                const droite = element('div', "flex items-center gap-1.5 shrink-0");
+                const btnSuppr = element('button', "btn-icone text-slate-500 hover:text-rose-400 text-xs px-1 cursor-pointer", "🗑️");
+                btnSuppr.title = "Supprimer";
+                btnSuppr.onclick = (e) => { e.stopPropagation(); supprimerTranscription(item); };
+                droite.append(element('span', `text-[9px] font-bold px-2 py-0.5 rounded-lg border whitespace-nowrap ${badgeStyle}`, badgeTexte), btnSuppr);
+                ligne.append(infos, droite);
 
-                const divElement = document.createElement('div');
-                divElement.className = "bg-slate-900/60 hover:bg-slate-900 p-3 rounded-2xl border border-slate-800/80 transition cursor-pointer shadow-sm flex items-center justify-between gap-2";
-                divElement.innerHTML = `
-                    <div class="overflow-hidden pr-1">
-                        <div class="font-semibold text-slate-200 truncate text-xs">📌 ${item.titre}</div>
-                        <div class="text-[10px] text-slate-500 mt-0.5">${item.date}</div>
-                    </div>
-                    <span class="text-[9px] font-bold px-2 py-0.5 rounded-lg border whitespace-nowrap ${badgeStyle}">
-                        ${badgeTexte}
-                    </span>
-                `;
-
-                divElement.onclick = () => {
-                    resDiv.textContent = item.texte;
-                    actionsContainer.style.display = "flex";
-                    traductionContainer.style.display = "flex";
-                    titreActuel = item.titre;
-                    if (modeEditionBadge) modeEditionBadge.classList.remove('hidden');
-                    if (item.audioUrl) chargerAudioDansLecteur(item.audioUrl);
+                ligne.onclick = () => {
+                    resDiv.dir = 'ltr';
+                    afficherResultat(item.texte, { id: item.id, titre: item.titre });
+                    if (item.aAudio) chargerAudioDepuisServeur(item.id);
+                    else viderLecteurAudio();
+                    if (estMobile()) definirSidebar(false);
                 };
 
-                listeHistorique.appendChild(divElement);
+                listeHistorique.appendChild(ligne);
             });
         }
 
         btnCopier.onclick = () => {
-            const texte = (resDiv.innerText || resDiv.textContent).trim();
-            navigator.clipboard.writeText(texte).then(() => {
+            navigator.clipboard.writeText(texteResultat()).then(() => {
                 btnCopier.textContent = "✨ Copié !";
                 setTimeout(() => { btnCopier.textContent = "📋 Copier"; }, 2000);
             });
@@ -909,10 +1067,7 @@ Le texte structuré et les résumés apparaîtront ici...
 
         // --- LANCEMENT AU DÉMARRAGE ---
         window.addEventListener('DOMContentLoaded', () => {
-            const token = localStorage.getItem('gemini_token');
-            if (token) {
-                demarrerApplication();
-            }
+            if (token()) demarrerApplication();
         });
     </script>
 </body>
