@@ -82,3 +82,17 @@ test('corrigerNombresArabes ne touche que les nombres en contexte arabe', async 
     assert.equal(corrigerNombresArabes('Budget 2026 : ميزانية'), 'Budget 2026 : ميزانية');
     assert.equal(corrigerNombresArabes('2026 ميزانية'), '6202 ميزانية');
 });
+
+test('quotas, jetons et variables d’environnement', async () => {
+    const { cleQuotaDuJour, hacherJeton, entierEnv, formaterMo } = await import('../lib/utils.js');
+    assert.equal(cleQuotaDuJour('analyses', new Date('2026-11-06T23:59:00Z')), 'analyses:2026-11-06');
+    const h = await hacherJeton('abc');
+    assert.equal(h.length, 64);
+    assert.notEqual(h, 'abc');
+    assert.equal(await hacherJeton('abc'), h);
+    assert.equal(entierEnv('250', 10), 250);
+    assert.equal(entierEnv(undefined, 10), 10);
+    assert.equal(entierEnv('-3', 10), 10);
+    assert.equal(entierEnv('abc', 10), 10);
+    assert.equal(formaterMo(100 * 1024 * 1024), '100 Mo');
+});

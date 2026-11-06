@@ -68,6 +68,9 @@
                 <a href="#" onclick="event.preventDefault(); basculerModeAuth()" id="auth-switch-link" class="text-indigo-400 hover:text-indigo-300 font-semibold transition">S'inscrire</a>
             </p>
             <div id="auth-message" class="text-center mt-4 text-sm font-semibold"></div>
+            <button id="auth-renvoyer" type="button" style="display: none;" class="w-full mt-3 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-indigo-300 text-xs font-semibold py-2.5 rounded-xl transition cursor-pointer">
+                ✉️ Renvoyer l'e-mail de confirmation
+            </button>
         </div>
     </div>
 
@@ -97,9 +100,15 @@
                     <div id="avatar-lettre" class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-black text-lg shadow-md shrink-0">
                         U
                     </div>
-                    <div class="overflow-hidden">
+                    <div class="overflow-hidden flex-1 min-w-0">
                         <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Session active</p>
                         <p id="profil-email" class="text-xs text-slate-200 font-bold truncate">utilisateur@email.com</p>
+                        <div id="profil-stockage" class="hidden mt-1.5" title="Espace utilisé par vos enregistrements audio">
+                            <div class="w-full bg-slate-800/80 h-1 rounded-full overflow-hidden">
+                                <div id="profil-stockage-barre" class="bg-indigo-500 h-full w-0 transition-all"></div>
+                            </div>
+                            <p id="profil-stockage-texte" class="text-[10px] text-slate-500 mt-0.5"></p>
+                        </div>
                     </div>
                 </div>
 
@@ -429,6 +438,47 @@ Le texte structuré et les résumés apparaîtront ici...
             $('auth-password').autocomplete = modeInscription ? "new-password" : "current-password";
             $('auth-password-hint').classList.toggle('hidden', !modeInscription);
             $('auth-message').innerText = "";
+            $('auth-renvoyer').style.display = "none";
+        }
+
+        function messageAuth(texte, couleur = 'rose') {
+            const msgDiv = $('auth-message');
+            msgDiv.innerText = texte;
+            msgDiv.className = `text-center mt-4 text-sm font-semibold text-${couleur}-400`;
+        }
+
+        $('auth-renvoyer').onclick = async () => {
+            const email = $('auth-email').value.trim();
+            if (!email) return messageAuth("Saisissez votre adresse e-mail.");
+            const btn = $('auth-renvoyer');
+            btn.disabled = true;
+            try {
+                const response = await fetch('/api/renvoyer-verification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                const data = await response.json().catch(() => ({ success: false, error: "Réponse inattendue du serveur." }));
+                if (data.success) messageAuth(data.message, 'emerald');
+                else messageAuth(data.error || "Erreur.");
+            } catch {
+                messageAuth("Erreur de connexion au serveur.");
+            } finally {
+                btn.disabled = false;
+            }
+        };
+
+        /** Message affiché au retour du lien de confirmation reçu par e-mail. */
+        function afficherRetourVerification() {
+            const parametres = new URLSearchParams(window.location.search);
+            const etat = parametres.get('verification');
+            if (!etat) return;
+            history.replaceState(null, '', window.location.pathname);
+            if (etat === 'ok') messageAuth("✅ Adresse confirmée ! Vous pouvez maintenant vous connecter.", 'emerald');
+            else if (etat === 'expiree') {
+                messageAuth("Ce lien a expiré. Saisissez votre e-mail et demandez-en un nouveau.");
+                $('auth-renvoyer').style.display = "block";
+            } else messageAuth("Lien de confirmation invalide ou déjà utilisé.");
         }
 
         async function gererConnexion() {
@@ -445,6 +495,7 @@ Le texte structuré et les résumés apparaîtront ici...
 
             const btn = $('auth-btn');
             btn.disabled = true;
+            $('auth-renvoyer').style.display = "none";
             try {
                 const response = await fetch(modeInscription ? '/api/register' : '/api/login', {
                     method: 'POST',
@@ -453,12 +504,16 @@ Le texte structuré et les résumés apparaîtront ici...
                 });
                 const data = await response.json().catch(() => ({ success: false, error: "Réponse inattendue du serveur." }));
 
-                if (!data.success) return erreur(data.error || "Erreur.");
+                if (!data.success) {
+                    erreur(data.error || "Erreur.");
+                    if (data.code === 'EMAIL_NON_VERIFIE') $('auth-renvoyer').style.display = "block";
+                    return;
+                }
 
                 if (modeInscription) {
                     basculerModeAuth();
-                    msgDiv.innerText = "Compte créé ! Veuillez vous connecter.";
-                    msgDiv.className = "text-center mt-4 text-sm font-semibold text-emerald-400";
+                    $('auth-password').value = '';
+                    messageAuth(data.message || "Compte créé. Vérifiez vos e-mails pour l'activer.", 'emerald');
                 } else {
                     localStorage.setItem('gemini_token', data.token);
                     localStorage.setItem('gemini_email', data.email);
@@ -487,6 +542,25 @@ Le texte structuré et les résumés apparaîtront ici...
 
             definirSidebar(window.matchMedia('(min-width: 768px)').matches);
             chargerHistoriqueDepuisBDD();
+            actualiserStockage();
+        }
+
+        /** Espace utilisé par les audios de l'utilisateur (affiché sous son e-mail). */
+        async function actualiserStockage() {
+            try {
+                const data = await appelApi('/api/moi');
+                if (!data.success || !data.stockage) return;
+                const { utilise, maximum } = data.stockage;
+                const mo = (o) => (o / 1024 / 1024).toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+                const pourcent = maximum > 0 ? Math.min(100, Math.round((utilise / maximum) * 100)) : 100;
+                $('profil-stockage').classList.remove('hidden');
+                $('profil-stockage-texte').textContent = `Stockage : ${mo(utilise)} / ${mo(maximum)} Mo`;
+                const barre = $('profil-stockage-barre');
+                barre.style.width = pourcent + '%';
+                barre.className = `h-full transition-all ${pourcent >= 90 ? 'bg-rose-500' : pourcent >= 70 ? 'bg-amber-500' : 'bg-indigo-500'}`;
+            } catch (err) {
+                console.error("Erreur chargement stockage :", err);
+            }
         }
 
         /** Remet l'interface à zéro pour que l'utilisateur suivant ne voie rien du précédent. */
@@ -819,12 +893,14 @@ Le texte structuré et les résumés apparaîtront ici...
                 catch { data = { success: false, error: `Réponse inattendue du serveur (${xhr.status}).` }; }
 
                 if (data.success) {
-                    elementStatut.textContent = "✅ Traitement terminé !";
+                    elementStatut.textContent = data.avertissement ? "⚠️ " + data.avertissement : "✅ Traitement terminé !";
                     finaliserPipelineSucces();
                     const nouvelItem = versItemHistorique(data);
                     afficherResultat(nouvelItem.texte, { id: nouvelItem.id, titre: nouvelItem.titre });
+                    if (!nouvelItem.aAudio) viderLecteurAudio();
                     historiqueTranscriptions.unshift(nouvelItem);
                     mettreAJourAffichageHistorique();
+                    actualiserStockage();
                 } else {
                     elementStatut.textContent = "❌ Erreur.";
                     resDiv.textContent = data.error || "Erreur de transcription.";
@@ -1000,6 +1076,7 @@ Le texte structuré et les résumés apparaîtront ici...
                 const data = await appelApi(`/historique/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
                 if (!data.success) return alert(data.error || "Suppression impossible.");
                 historiqueTranscriptions = historiqueTranscriptions.filter(i => i.id !== item.id);
+                actualiserStockage();
                 if (idActuel === item.id) {
                     idActuel = null;
                     resDiv.textContent = TEXTE_PAR_DEFAUT;
@@ -1067,6 +1144,7 @@ Le texte structuré et les résumés apparaîtront ici...
 
         // --- LANCEMENT AU DÉMARRAGE ---
         window.addEventListener('DOMContentLoaded', () => {
+            afficherRetourVerification();
             if (token()) demarrerApplication();
         });
     </script>
