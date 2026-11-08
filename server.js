@@ -100,13 +100,16 @@ app.use(express.json({ limit: '1mb' }));
 const uploadDir = path.join(__dirname, 'uploads');
 fs.mkdirSync(uploadDir, { recursive: true });
 
-// Uniquement les fichiers du dossier public/ (s'il existe) et la page d'accueil.
-// Le code source du serveur n'est plus exposé.
-app.use(express.static(path.join(__dirname, 'public')));
-app.get('/', (req, res) => {
-    const publicIndexPath = path.join(__dirname, 'public', 'index.html');
-    res.sendFile(fs.existsSync(publicIndexPath) ? publicIndexPath : path.join(__dirname, 'index.html'));
-});
+// Seuls les fichiers du dossier public/ (page, styles, script) sont servis :
+// le code source du serveur n'est pas exposé. no-cache : le navigateur revalide
+// à chaque visite, donc une nouvelle version du site est prise en compte tout de suite.
+app.use(express.static(path.join(__dirname, 'public'), {
+    setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache')
+}));
+// Polices servies par l'application elle-même (aucun appel à un service tiers comme Google Fonts)
+const optionsPolices = { maxAge: '30d', immutable: true };
+app.use('/polices/inter', express.static(path.join(__dirname, 'node_modules/@fontsource/inter/files'), optionsPolices));
+app.use('/polices/space-grotesk', express.static(path.join(__dirname, 'node_modules/@fontsource/space-grotesk/files'), optionsPolices));
 
 // ==========================================
 // 🗄️ BASE DE DONNÉES

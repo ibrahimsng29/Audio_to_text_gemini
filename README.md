@@ -38,6 +38,19 @@ L'application est servie sur http://localhost:3000.
 | `QUOTA_STOCKAGE_UTILISATEUR_MO` | non | Espace audio par utilisateur, en Mo (défaut `100`). |
 | `QUOTA_STOCKAGE_TOTAL_MO` | non | Espace audio pour tout le site, en Mo (défaut `400`, pour rester sous les 512 Mo d'Atlas gratuit). |
 
+## Structure
+
+| Fichier | Rôle |
+|---|---|
+| `server.js` | Serveur Express : API, authentification, quotas, Gemini, PDF, e-mails. |
+| `public/index.html` | Page de l'application. |
+| `public/app.css` | Styles de l'interface (thème sombre « Studio »), sans bibliothèque externe. |
+| `public/app.js` | Logique de l'interface. |
+| `lib/utils.js` | Fonctions utilitaires testées par `npm test`. |
+
+L'interface ne charge rien depuis un site tiers : les polices (Inter, Space Grotesk) sont fournies par
+les paquets `@fontsource` et servies par l'application sous `/polices/`.
+
 ## Fonctionnement
 
 - **Audio** : le fichier est reçu dans `uploads/` (dossier temporaire), envoyé à Gemini — directement s'il fait
