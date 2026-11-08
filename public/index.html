@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>Gemini Audio</title>
+    <link rel="stylesheet" href="/app.css">
+    <script src="/app.js" defer></script>
+</head>
+<body>
+
+    <!-- ============ CONNEXION / INSCRIPTION ============ -->
+    <div id="auth-section" class="auth">
+        <div class="auth-carte">
+            <div class="logo logo-grand">
+                <span class="logo-icone" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4"/></svg>
+                </span>
+                <span class="logo-texte">Gemini Audio</span>
+            </div>
+            <h1 id="auth-title" class="auth-titre">Connexion</h1>
+            <p class="auth-sous-titre">Transformez vos enregistrements en documents structurés.</p>
+
+            <form id="auth-form" class="pile" novalidate>
+                <label class="champ">
+                    <span class="champ-libelle">Adresse e-mail</span>
+                    <input type="email" id="auth-email" class="input" autocomplete="email" required>
+                </label>
+                <label class="champ">
+                    <span class="champ-libelle">Mot de passe</span>
+                    <input type="password" id="auth-password" class="input" autocomplete="current-password" required>
+                    <span id="auth-password-hint" class="champ-aide" hidden>8 caractères minimum.</span>
+                </label>
+                <button type="submit" id="auth-btn" class="btn btn-primaire btn-large">Se connecter</button>
+            </form>
+
+            <div id="auth-message" class="message" role="status" aria-live="polite"></div>
+            <button id="auth-renvoyer" type="button" class="btn btn-secondaire btn-large" hidden>Renvoyer l'e-mail de confirmation</button>
+
+            <p class="auth-bascule">
+                <span id="auth-switch-text">Pas encore de compte ?</span>
+                <button type="button" id="auth-switch-link" class="lien">Créer un compte</button>
+            </p>
+        </div>
+    </div>
+
+    <!-- ============ APPLICATION ============ -->
+    <div id="app-section" class="app" hidden>
+
+        <header class="topbar">
+            <button id="btnToggleSidebar" class="btn-icone mobile-seulement" aria-label="Afficher l'historique" aria-controls="sidebar" aria-expanded="false">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+            <div class="logo">
+                <span class="logo-icone" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4"/></svg>
+                </span>
+                <span class="logo-texte">Gemini Audio</span>
+            </div>
+
+            <label class="recherche ordinateur-seulement">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input type="search" id="inputRechercheHistorique" placeholder="Rechercher dans vos enregistrements" aria-label="Rechercher dans vos enregistrements">
+            </label>
+
+            <div class="topbar-droite">
+                <div class="stockage ordinateur-seulement" title="Espace utilisé par vos enregistrements audio" hidden>
+                    <span class="stockage-texte"></span>
+                    <span class="jauge"><span class="jauge-remplie"></span></span>
+                </div>
+                <div class="compte">
+                    <button id="btnCompte" class="avatar" aria-haspopup="true" aria-expanded="false" aria-controls="menuCompte">
+                        <span id="avatar-lettre">U</span>
+                        <span class="sr-only">Mon compte</span>
+                    </button>
+                    <div id="menuCompte" class="menu-compte" hidden>
+                        <div class="menu-compte-libelle">Connecté en tant que</div>
+                        <div id="profil-email" class="menu-compte-email"></div>
+                        <div class="stockage stockage-menu" hidden>
+                            <span class="stockage-texte"></span>
+                            <span class="jauge"><span class="jauge-remplie"></span></span>
+                        </div>
+                        <button id="btnDeconnexion" class="btn btn-secondaire btn-plein">Se déconnecter</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="disposition">
+            <!-- Historique -->
+            <aside id="sidebar" class="sidebar" aria-label="Historique">
+                <label class="recherche mobile-seulement">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                    <input type="search" id="inputRechercheMobile" placeholder="Rechercher" aria-label="Rechercher dans vos enregistrements">
+                </label>
+                <h2 class="surtitre">Récents</h2>
+                <div id="listeHistorique" class="historique">
+                    <p id="aucunHistorique" class="historique-vide">Aucun enregistrement pour l'instant</p>
+                </div>
+                <button id="btnChargerPlus" class="btn btn-secondaire btn-plein" hidden>Charger plus</button>
+            </aside>
+            <div id="voile" class="voile" hidden></div>
+
+            <main id="mainContent" class="principal">
+
+                <!-- Nouvel enregistrement -->
+                <section class="carte capture" aria-labelledby="titreCapture">
+                    <h2 id="titreCapture" class="sr-only">Nouvel enregistrement</h2>
+                    <div class="capture-actions">
+                        <button id="btnEnregistrer" class="btn btn-rec">
+                            <span class="point-rec" aria-hidden="true"></span>
+                            <span class="libelle">Enregistrer</span>
+                        </button>
+                        <label id="zoneDepot" class="depot">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
+                            <span>Importer ou glisser un fichier</span>
+                            <input type="file" id="inputFileAudio" accept="audio/*,video/*" class="sr-only">
+                        </label>
+                        <span class="capture-aide">MP3, M4A, WAV, MP4… jusqu'à 100 Mo</span>
+                    </div>
+                    <div class="pastilles" role="group" aria-label="Format du résultat" id="choixMode">
+                        <button type="button" class="pastille" data-mode="resume" aria-pressed="true">Résumé</button>
+                        <button type="button" class="pastille" data-mode="cours" aria-pressed="false">Cours + quiz</button>
+                        <button type="button" class="pastille" data-mode="reunion" aria-pressed="false">Réunion</button>
+                        <button type="button" class="pastille" data-mode="bullet" aria-pressed="false">Puces</button>
+                        <button type="button" class="pastille" data-mode="todo" aria-pressed="false">Tâches</button>
+                        <button type="button" class="pastille" data-mode="brut" aria-pressed="false">Transcription brute</button>
+                    </div>
+                    <p id="statut" class="statut" role="status" aria-live="polite"></p>
+
+                    <!-- Progression de l'analyse -->
+                    <div id="progression" class="progression" hidden>
+                        <div class="progression-barre"><span id="progressionBarre"></span></div>
+                        <ol class="etapes">
+                            <li data-etape="1"><span class="etape-point" aria-hidden="true"></span>Envoi <span class="etape-etat" id="etapeEnvoi"></span></li>
+                            <li data-etape="2"><span class="etape-point" aria-hidden="true"></span>Réception</li>
+                            <li data-etape="3"><span class="etape-point" aria-hidden="true"></span>Analyse Gemini</li>
+                            <li data-etape="4"><span class="etape-point" aria-hidden="true"></span>Prêt</li>
+                        </ol>
+                        <button id="btnAnnuler" class="btn btn-secondaire btn-petit" hidden>Annuler</button>
+                    </div>
+                </section>
+
+                <!-- Document -->
+                <article id="document" class="carte document">
+                    <div class="document-entete">
+                        <div class="document-titres">
+                            <h1 id="docTitre" class="document-titre">Aucun document ouvert</h1>
+                            <p id="docMeta" class="document-meta">Enregistrez ou importez un audio : le résultat s'affichera ici.</p>
+                        </div>
+                        <div id="actionsContainer" class="document-actions" hidden>
+                            <button id="btnCopier" class="btn btn-secondaire btn-petit">Copier</button>
+                            <button id="btnSauvegarder" class="btn btn-secondaire btn-petit">Enregistrer</button>
+                            <div id="traductionContainer" class="groupe-traduction">
+                                <select id="selectLangue" class="select select-petit" aria-label="Langue de traduction">
+                                    <option value="Anglais">Anglais</option>
+                                    <option value="Espagnol">Espagnol</option>
+                                    <option value="Allemand">Allemand</option>
+                                    <option value="Arabe">Arabe</option>
+                                    <option value="Italien">Italien</option>
+                                    <option value="Français">Français</option>
+                                </select>
+                                <button id="btnTraduire" class="btn btn-secondaire btn-petit">Traduire</button>
+                            </div>
+                            <button id="btnOuvrirPdf" class="btn btn-primaire btn-petit" aria-expanded="false" aria-controls="panneauPdf">Envoyer en PDF</button>
+                        </div>
+                    </div>
+
+                    <div id="panneauPdf" class="panneau-pdf" hidden>
+                        <label class="champ champ-flex">
+                            <span class="champ-libelle">Destinataires (5 maximum, séparés par des virgules)</span>
+                            <input type="text" id="inputEmail" class="input" placeholder="nom@exemple.fr, autre@exemple.fr" autocomplete="email">
+                        </label>
+                        <label class="champ">
+                            <span class="champ-libelle">Modèle</span>
+                            <select id="selectModelePdf" class="select">
+                                <option value="classique">Classique</option>
+                                <option value="executif">Exécutif</option>
+                                <option value="academique">Académique</option>
+                            </select>
+                        </label>
+                        <button id="btnEnvoyerEmail" class="btn btn-primaire">Envoyer</button>
+                        <p id="statutEmail" class="message message-plein" role="status" aria-live="polite"></p>
+                    </div>
+
+                    <div id="lecteurContainer" class="lecteur" hidden>
+                        <audio id="lecteurAudio" controls preload="metadata"></audio>
+                    </div>
+
+                    <div class="document-corps">
+                        <div class="document-bandeau">
+                            <p id="modeEditionBadge" class="aide-edition" hidden>Cliquez dans le texte pour le corriger, puis « Enregistrer ».</p>
+                            <span id="statutTraduction" class="statut-traduction" role="status" aria-live="polite"></span>
+                            <button id="btnTexteOriginal" class="lien" hidden>Revenir au texte original</button>
+                        </div>
+                        <div id="resultat" class="document-texte" spellcheck="true" data-placeholder="Le texte structuré apparaîtra ici."></div>
+                    </div>
+                </article>
+            </main>
+        </div>
+
+        <!-- Navigation mobile -->
+        <nav class="nav-mobile mobile-seulement" aria-label="Navigation principale">
+            <button id="navEnregistrer" class="nav-item actif">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+                Enregistrer
+            </button>
+            <button id="navHistorique" class="nav-item">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+                Historique
+            </button>
+            <button id="navCompte" class="nav-item">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                Compte
+            </button>
+        </nav>
+    </div>
+</body>
+</html>
