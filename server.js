@@ -18,7 +18,8 @@ import {
     normaliserEmail, validerMotDePasse, analyserDestinataires, nettoyerTitre, validerTexte,
     extensionPourMime, estMimeAutorise, mimeDeBase,
     estErreurTemporaire, delaiReessai, retirerEmojis, estMajoritairementArabe, corrigerNombresArabes,
-    cleQuotaDuJour, hacherJeton, entierEnv, formaterMo
+    cleQuotaDuJour, hacherJeton, entierEnv, formaterTaille,
+    lireCookie, decoderJwt, profilGoogleValide
 } from './lib/utils.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -54,7 +55,15 @@ if (!EMAIL_CONFIGURE) {
     console.warn("⚠️ BREVO_API_KEY ou EMAIL_USER absent : les e-mails ne sont pas envoyés, les liens de vérification sont affichés dans la console.");
 }
 
-// Adresse publique du site, utilisée dans les liens des e-mails. Elle ne doit JAMAIS être
+// Connexion avec un compte Google (facultative) : activée si les deux variables sont présentes.
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const GOOGLE_CONFIGURE = Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
+if (!GOOGLE_CONFIGURE && (GOOGLE_CLIENT_ID || GOOGLE_CLIENT_SECRET)) {
+    console.warn("⚠️ GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET doivent être définis tous les deux : connexion Google désactivée.");
+}
+
+// Adresse publique du site, utilisée dans les liens des e-mails et le retour de Google. Elle ne doit JAMAIS être
 // déduite de l'en-tête Host de la requête : un attaquant pourrait sinon faire pointer
 // le lien de vérification vers son propre site et récupérer le jeton.
 // Render fournit RENDER_EXTERNAL_URL automatiquement.
@@ -68,9 +77,11 @@ const QUOTAS_JOUR = {
     emailsPdf: entierEnv(process.env.QUOTA_JOUR_EMAILS_PDF, 150),       // compté par destinataire
     emailsCompte: entierEnv(process.env.QUOTA_JOUR_EMAILS_COMPTE, 100)  // e-mails de vérification
 };
-// Espace de stockage des audios (MongoDB Atlas gratuit : 512 Mo au total).
+// Espace de stockage des audios : 5 Go par utilisateur par défaut. Le plafond du site reste
+// calé sur MongoDB Atlas gratuit (512 Mo au total) : à relever avec QUOTA_STOCKAGE_TOTAL_MO
+// si votre base est plus grande, sinon c'est lui qui est atteint en premier.
 const MO = 1024 * 1024;
-const STOCKAGE_MAX_UTILISATEUR = entierEnv(process.env.QUOTA_STOCKAGE_UTILISATEUR_MO, 100) * MO;
+const STOCKAGE_MAX_UTILISATEUR = entierEnv(process.env.QUOTA_STOCKAGE_UTILISATEUR_MO, 5 * 1024) * MO;
 const STOCKAGE_MAX_TOTAL = entierEnv(process.env.QUOTA_STOCKAGE_TOTAL_MO, 400) * MO;
 const DUREE_VALIDITE_LIEN = 24 * 60 * 60 * 1000;       // lien de vérification : 24 h
 const DELAI_RENVOI_EMAIL = 2 * 60 * 1000;              // 1 e-mail de vérification / 2 min / compte
@@ -130,6 +141,7 @@ const userSchema = new mongoose.Schema({
     jetonVerification: { type: String, index: true, sparse: true }, // empreinte SHA-256, jamais le jeton lui-même
     jetonVerificationExpire: Date,
     verificationEnvoyeeLe: Date,
+    googleId: { type: String, index: true, sparse: true }, // identifiant du compte Google, s'il a servi à se connecter
     dateCreation: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', userSchema);
@@ -454,6 +466,9 @@ app.post('/api/renvoyer-verification', limiteAuth, async (req, res, next) => {
     }
 });
 
+const creerSession = (user) =>
+    jwt.sign({ id: user._id, email: user.email, ev: true }, JWT_SECRET, { expiresIn: '24h', algorithm: 'HS256' });
+
 // Empreinte bcrypt factice : la connexion prend le même temps que le compte existe ou non.
 const EMPREINTE_FACTICE = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 12);
 
@@ -476,10 +491,97 @@ app.post('/api/login', limiteAuth, async (req, res, next) => {
             });
         }
 
-        const token = jwt.sign({ id: user._id, email: user.email, ev: true }, JWT_SECRET, { expiresIn: '24h', algorithm: 'HS256' });
-        res.json({ success: true, token, email: user.email, message: "Connexion réussie !" });
+        res.json({ success: true, token: creerSession(user), email: user.email, message: "Connexion réussie !" });
     } catch (error) {
         next(error);
+    }
+});
+
+// ==========================================
+// 🔑 CONNEXION AVEC GOOGLE (OAuth 2.0, sans script tiers dans la page)
+// ==========================================
+// 1. /api/auth/google redirige vers Google ; 2. Google renvoie sur …/callback avec un code ;
+// 3. le serveur échange ce code contre l'identité de l'utilisateur, puis ouvre la session.
+const GOOGLE_RETOUR = `${URL_PUBLIQUE}/api/auth/google/callback`;
+const COOKIE_ETAT = 'g_etat';
+const cookieEtat = (valeur, dureeSecondes) =>
+    `${COOKIE_ETAT}=${valeur}; Max-Age=${dureeSecondes}; Path=/api/auth/google; HttpOnly; SameSite=Lax${PROD ? '; Secure' : ''}`;
+
+// Public : indique à la page quelles options de connexion proposer.
+app.get('/api/config', (req, res) => {
+    res.json({ success: true, google: GOOGLE_CONFIGURE });
+});
+
+app.get('/api/auth/google', limiteAuth, (req, res) => {
+    if (!GOOGLE_CONFIGURE) return res.redirect('/?google=indisponible');
+    // L'état, gardé dans un cookie, prouve au retour que la demande vient bien de ce navigateur.
+    const etat = crypto.randomBytes(24).toString('hex');
+    res.setHeader('Set-Cookie', cookieEtat(etat, 600));
+    res.redirect('https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        redirect_uri: GOOGLE_RETOUR,
+        response_type: 'code',
+        scope: 'openid email',
+        state: etat,
+        prompt: 'select_account'
+    }));
+});
+
+app.get('/api/auth/google/callback', limiteAuth, async (req, res) => {
+    const echec = (raison = 'erreur') => res.redirect(`/?google=${raison}`);
+    try {
+        if (!GOOGLE_CONFIGURE) return echec('indisponible');
+        const etatAttendu = lireCookie(req.headers.cookie, COOKIE_ETAT);
+        res.setHeader('Set-Cookie', cookieEtat('', 0));
+
+        if (req.query.error) return echec('annule');
+        const { code, state } = req.query;
+        const etatValide = typeof state === 'string' && etatAttendu && state.length === etatAttendu.length &&
+            crypto.timingSafeEqual(Buffer.from(state), Buffer.from(etatAttendu));
+        if (!etatValide || typeof code !== 'string') return echec();
+
+        const reponse = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'content-type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                code,
+                client_id: GOOGLE_CLIENT_ID,
+                client_secret: GOOGLE_CLIENT_SECRET,
+                redirect_uri: GOOGLE_RETOUR,
+                grant_type: 'authorization_code'
+            }),
+            signal: AbortSignal.timeout(15_000)
+        });
+        if (!reponse.ok) {
+            console.error("Erreur Google (échange du code) :", reponse.status, await reponse.text().catch(() => ''));
+            return echec();
+        }
+        // Le jeton d'identité est reçu directement de Google en HTTPS, avec notre secret :
+        // son origine est donc sûre, il reste à contrôler son contenu.
+        const profil = profilGoogleValide(decoderJwt((await reponse.json()).id_token), GOOGLE_CLIENT_ID);
+        if (!profil) return echec('email');
+
+        let user = await User.findOne({ googleId: profil.googleId }) || await User.findOne({ email: profil.email });
+        if (!user) {
+            // Nouveau compte : Google a déjà confirmé l'adresse. Mot de passe aléatoire, inutilisable.
+            user = new User({ email: profil.email, password: await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12) });
+        } else if (!user.emailVerifie) {
+            // Compte créé avec cette adresse mais jamais confirmé : son mot de passe a peut-être été
+            // choisi par quelqu'un d'autre. On l'invalide pour que seul le titulaire de l'adresse y accède.
+            user.password = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
+        }
+        user.googleId = profil.googleId;
+        user.emailVerifie = true;
+        user.jetonVerification = undefined;
+        user.jetonVerificationExpire = undefined;
+        await user.save();
+
+        // Le jeton de session est remis dans le fragment (#) de l'adresse : il n'est envoyé à aucun
+        // serveur et la page l'efface de la barre d'adresse dès qu'elle l'a lu.
+        res.redirect('/#' + new URLSearchParams({ session: creerSession(user), email: user.email }));
+    } catch (error) {
+        console.error("Erreur connexion Google :", error);
+        echec();
     }
 });
 
@@ -548,10 +650,10 @@ app.post('/transcrire', verifierToken, limiteTranscription, upload.single('audio
         let avertissement = null;
         const [utiliseParMoi, utiliseTotal] = await Promise.all([espaceUtilise(req.user.id), espaceUtilise()]);
         if (utiliseParMoi + req.file.size > STOCKAGE_MAX_UTILISATEUR) {
-            avertissement = `Transcription enregistrée, mais pas l'audio : votre espace est plein (${formaterMo(utiliseParMoi)} sur ${formaterMo(STOCKAGE_MAX_UTILISATEUR)}). Supprimez d'anciens enregistrements pour libérer de la place.`;
+            avertissement = `Transcription enregistrée, mais pas l'audio : votre espace est plein (${formaterTaille(utiliseParMoi)} sur ${formaterTaille(STOCKAGE_MAX_UTILISATEUR)}). Supprimez d'anciens enregistrements pour libérer de la place.`;
         } else if (utiliseTotal + req.file.size > STOCKAGE_MAX_TOTAL) {
             avertissement = "Transcription enregistrée, mais pas l'audio : l'espace de stockage du site est plein.";
-            console.warn(`⚠️ Stockage total des audios presque plein : ${formaterMo(utiliseTotal)} sur ${formaterMo(STOCKAGE_MAX_TOTAL)}.`);
+            console.warn(`⚠️ Stockage total des audios presque plein : ${formaterTaille(utiliseTotal)} sur ${formaterTaille(STOCKAGE_MAX_TOTAL)}.`);
         } else {
             audioFileId = await stockerAudioDansGridFS(cheminTemp, req.file.filename, mimeType, req.user.id);
         }

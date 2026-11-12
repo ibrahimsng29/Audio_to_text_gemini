@@ -84,7 +84,7 @@ test('corrigerNombresArabes ne touche que les nombres en contexte arabe', async 
 });
 
 test('quotas, jetons et variables d’environnement', async () => {
-    const { cleQuotaDuJour, hacherJeton, entierEnv, formaterMo } = await import('../lib/utils.js');
+    const { cleQuotaDuJour, hacherJeton, entierEnv, formaterTaille } = await import('../lib/utils.js');
     assert.equal(cleQuotaDuJour('analyses', new Date('2026-11-06T23:59:00Z')), 'analyses:2026-11-06');
     const h = await hacherJeton('abc');
     assert.equal(h.length, 64);
@@ -94,5 +94,33 @@ test('quotas, jetons et variables d’environnement', async () => {
     assert.equal(entierEnv(undefined, 10), 10);
     assert.equal(entierEnv('-3', 10), 10);
     assert.equal(entierEnv('abc', 10), 10);
-    assert.equal(formaterMo(100 * 1024 * 1024), '100 Mo');
+    assert.equal(formaterTaille(100 * 1024 * 1024), '100 Mo');
+    assert.equal(formaterTaille(5 * 1024 * 1024 * 1024), '5 Go');
+    assert.equal(formaterTaille(1.5 * 1024 * 1024 * 1024), '1,5 Go');
+});
+
+test('lireCookie', async () => {
+    const { lireCookie } = await import('../lib/utils.js');
+    assert.equal(lireCookie('a=1; g_etat=abc; b=2', 'g_etat'), 'abc');
+    assert.equal(lireCookie('xg_etat=abc', 'g_etat'), null);
+    assert.equal(lireCookie(undefined, 'g_etat'), null);
+});
+
+test('jeton d’identité Google', async () => {
+    const { decoderJwt, profilGoogleValide } = await import('../lib/utils.js');
+    const maintenant = Date.parse('2026-11-12T12:00:00Z');
+    const contenu = {
+        iss: 'https://accounts.google.com', aud: 'mon-client', sub: '1234',
+        email: 'Jean@Exemple.fr', email_verified: true, exp: maintenant / 1000 + 600
+    };
+    const jeton = `x.${Buffer.from(JSON.stringify(contenu)).toString('base64url')}.y`;
+    assert.deepEqual(decoderJwt(jeton), contenu);
+    assert.equal(decoderJwt('pas-un-jeton'), null);
+
+    assert.deepEqual(profilGoogleValide(contenu, 'mon-client', maintenant), { googleId: '1234', email: 'jean@exemple.fr' });
+    assert.equal(profilGoogleValide(contenu, 'autre-client', maintenant), null);            // destiné à une autre application
+    assert.equal(profilGoogleValide({ ...contenu, iss: 'https://evil.example' }, 'mon-client', maintenant), null);
+    assert.equal(profilGoogleValide({ ...contenu, email_verified: false }, 'mon-client', maintenant), null);
+    assert.equal(profilGoogleValide({ ...contenu, exp: maintenant / 1000 - 1 }, 'mon-client', maintenant), null);
+    assert.equal(profilGoogleValide(null, 'mon-client', maintenant), null);
 });
