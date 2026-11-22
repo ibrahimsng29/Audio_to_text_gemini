@@ -182,6 +182,33 @@ function afficherRetourVerification() {
     } else messageAuth("Lien de confirmation invalide ou déjà utilisé.");
 }
 
+/** Affiche le bouton « Continuer avec Google » si le serveur le propose. */
+async function proposerConnexionGoogle() {
+    try {
+        const data = await (await fetch('/api/config')).json();
+        $('auth-google').hidden = !data.google;
+    } catch { /* le bouton reste masqué */ }
+}
+
+/** Retour de Google : ouvre la session (jeton dans le fragment de l'adresse) ou affiche l'erreur. */
+function traiterRetourGoogle() {
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    const session = fragment.get('session');
+    if (session) {
+        history.replaceState(null, '', window.location.pathname);
+        localStorage.setItem('gemini_token', session);
+        localStorage.setItem('gemini_email', fragment.get('email') || '');
+        return;
+    }
+    const etat = new URLSearchParams(window.location.search).get('google');
+    if (!etat) return;
+    history.replaceState(null, '', window.location.pathname);
+    if (etat === 'annule') messageAuth("Connexion avec Google annulée.", 'alerte');
+    else if (etat === 'email') messageAuth("Google n'a pas confirmé l'adresse e-mail de ce compte.");
+    else if (etat === 'indisponible') messageAuth("La connexion avec Google n'est pas activée sur ce site.");
+    else messageAuth("La connexion avec Google a échoué. Réessayez.");
+}
+
 function demarrerApplication() {
     $('auth-section').hidden = true;
     $('app-section').hidden = false;
@@ -280,11 +307,16 @@ async function actualiserStockage() {
         const data = await appelApi('/api/moi');
         if (!data.success || !data.stockage) return;
         const { utilise, maximum } = data.stockage;
-        const mo = (o) => (o / 1024 / 1024).toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+        // « 320 Mo » en dessous de 1 Go, « 1,2 Go » au-delà
+        const taille = (o) => {
+            const mo = o / 1024 / 1024;
+            const [valeur, unite] = mo >= 1024 ? [mo / 1024, 'Go'] : [mo, 'Mo'];
+            return `${valeur.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} ${unite}`;
+        };
         const pourcent = maximum > 0 ? Math.min(100, Math.round((utilise / maximum) * 100)) : 100;
         document.querySelectorAll('.stockage').forEach(bloc => {
             bloc.hidden = false;
-            bloc.querySelector('.stockage-texte').textContent = `Stockage ${mo(utilise)} / ${mo(maximum)} Mo`;
+            bloc.querySelector('.stockage-texte').textContent = `Stockage ${taille(utilise)} / ${taille(maximum)}`;
             const barre = bloc.querySelector('.jauge-remplie');
             barre.style.width = pourcent + '%';
             barre.classList.toggle('moyen', pourcent >= 70 && pourcent < 90);
@@ -966,5 +998,7 @@ document.addEventListener('DOMContentLoaded', () => {
     choisirMode(lireStockageLocal('gemini_mode') || 'resume');
     viderDocument();
     afficherRetourVerification();
+    traiterRetourGoogle();
+    proposerConnexionGoogle();
     if (token()) demarrerApplication();
 });

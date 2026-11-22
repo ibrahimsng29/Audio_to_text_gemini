@@ -35,8 +35,10 @@ L'application est servie sur http://localhost:3000.
 | `QUOTA_JOUR_TRADUCTIONS` | non | Traductions par jour pour tout le site (défaut `300`). |
 | `QUOTA_JOUR_EMAILS_PDF` | non | Destinataires de PDF par jour pour tout le site (défaut `150`). |
 | `QUOTA_JOUR_EMAILS_COMPTE` | non | E-mails de confirmation par jour (défaut `100`). Avec le précédent : 250, sous la limite de 300/jour de l'offre gratuite de Brevo. |
-| `QUOTA_STOCKAGE_UTILISATEUR_MO` | non | Espace audio par utilisateur, en Mo (défaut `100`). |
-| `QUOTA_STOCKAGE_TOTAL_MO` | non | Espace audio pour tout le site, en Mo (défaut `400`, pour rester sous les 512 Mo d'Atlas gratuit). |
+| `QUOTA_STOCKAGE_UTILISATEUR_MO` | non | Espace audio par utilisateur, en Mo (défaut `5120`, soit 5 Go). |
+| `QUOTA_STOCKAGE_TOTAL_MO` | non | Espace audio pour tout le site, en Mo (défaut `400`, pour rester sous les 512 Mo d'Atlas gratuit). Tant qu'il est inférieur au quota par utilisateur, c'est lui qui est atteint en premier : relevez-le si votre base MongoDB est plus grande. |
+| `GOOGLE_CLIENT_ID` | non | Identifiant client OAuth Google. Avec `GOOGLE_CLIENT_SECRET`, active le bouton « Continuer avec Google ». |
+| `GOOGLE_CLIENT_SECRET` | non | Secret du client OAuth Google. |
 
 ## Structure
 
@@ -50,6 +52,22 @@ L'application est servie sur http://localhost:3000.
 
 L'interface ne charge rien depuis un site tiers : les polices (Inter, Space Grotesk) sont fournies par
 les paquets `@fontsource` et servies par l'application sous `/polices/`.
+
+## Connexion avec Google
+
+Facultative : sans les deux variables `GOOGLE_*`, le bouton n'apparaît pas et rien ne change.
+
+1. Dans [Google Cloud Console](https://console.cloud.google.com/apis/credentials), créez un projet, configurez
+   l'écran de consentement OAuth, puis créez un **ID client OAuth** de type « Application Web ».
+2. Dans « URI de redirection autorisés », ajoutez `https://VOTRE-SITE/api/auth/google/callback`
+   (et `http://localhost:3000/api/auth/google/callback` pour le développement). L'adresse doit correspondre
+   exactement à `APP_URL` / `RENDER_EXTERNAL_URL`.
+3. Renseignez `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` sur l'hébergeur, puis redéployez.
+
+La connexion se fait par redirection vers Google (aucun script Google n'est chargé dans la page). Seule l'adresse
+e-mail est demandée. Un compte Google ouvre le compte existant qui porte la même adresse, ou en crée un nouveau,
+sans e-mail de confirmation puisque Google a déjà vérifié l'adresse. Si un compte existait avec cette adresse sans
+avoir été confirmé, son mot de passe est invalidé au passage.
 
 ## Fonctionnement
 
@@ -82,6 +100,8 @@ npm test
 | POST | `/api/login` | Connexion, renvoie un jeton valable 24 h (403 `EMAIL_NON_VERIFIE` si l'adresse n'est pas confirmée). |
 | GET | `/api/verifier-email?jeton=…` | Lien reçu par e-mail ; redirige vers `/?verification=ok`, `expiree` ou `invalide`. |
 | POST | `/api/renvoyer-verification` | `email` ; renvoie le lien (au plus une fois toutes les 2 minutes). |
+| GET | `/api/config` | Options de connexion proposées (`google` : vrai ou faux). |
+| GET | `/api/auth/google` | Redirige vers Google ; au retour (`/api/auth/google/callback`), ouvre la session ou redirige vers `/?google=erreur`, `annule`, `email`. |
 | GET | `/api/moi` | E-mail et espace de stockage utilisé. |
 | POST | `/transcrire` | Formulaire multipart : `audio`, `mode`, `titreSource`. |
 | GET | `/historique?avant=<date ISO>` | 30 transcriptions par page, plus récentes d'abord. |

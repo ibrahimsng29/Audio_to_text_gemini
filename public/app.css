@@ -124,6 +124,9 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 }
 .auth-titre { margin: 8px 0 0; font-family: var(--police-titre); font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
 .auth-sous-titre { margin: -10px 0 4px; color: var(--discret); }
+a.btn { text-decoration: none; }
+.separateur { display: flex; align-items: center; gap: 12px; color: var(--discret); font-size: 12px; }
+.separateur::before, .separateur::after { content: ''; flex: 1; height: 1px; background: var(--bord-2); }
 .auth-bascule { margin: 0; color: var(--discret); font-size: 13px; text-align: center; }
 
 /* ---------- Barre du haut ---------- */
