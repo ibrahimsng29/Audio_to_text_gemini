@@ -119,8 +119,8 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 // Polices servies par l'application elle-même (aucun appel à un service tiers comme Google Fonts)
 const optionsPolices = { maxAge: '30d', immutable: true };
-app.use('/polices/inter', express.static(path.join(__dirname, 'node_modules/@fontsource/inter/files'), optionsPolices));
-app.use('/polices/space-grotesk', express.static(path.join(__dirname, 'node_modules/@fontsource/space-grotesk/files'), optionsPolices));
+app.use('/polices/manrope', express.static(path.join(__dirname, 'node_modules/@fontsource/manrope/files'), optionsPolices));
+app.use('/polices/unbounded', express.static(path.join(__dirname, 'node_modules/@fontsource/unbounded/files'), optionsPolices));
 
 // ==========================================
 // 🗄️ BASE DE DONNÉES

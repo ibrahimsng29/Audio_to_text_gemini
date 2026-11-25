@@ -233,7 +233,6 @@ function reinitialiserEspaceTravail() {
     reinitialiserBoutonEnregistrer();
     historiqueTranscriptions = [];
     historiqueEncorePlus = false;
-    $('inputRechercheHistorique').value = '';
     $('inputRechercheMobile').value = '';
     $('inputEmail').value = '';
     $('inputFileAudio').value = '';
@@ -266,16 +265,22 @@ function gererExpirationSession() {
 }
 
 // =========================================================
-// NAVIGATION : historique (tiroir sur mobile) et menu du compte
+// NAVIGATION : bibliothèque (tiroir) et menu du compte
 // =========================================================
 const estMobile = () => !window.matchMedia('(min-width: 768px)').matches;
 
 function definirSidebar(ouverte) {
     const sidebar = $('sidebar');
+    const etaitOuverte = sidebar.classList.contains('ouverte');
     sidebar.classList.toggle('ouverte', ouverte);
-    $('voile').hidden = !(ouverte && estMobile());
+    sidebar.inert = !ouverte;   // fermé : ni focus clavier ni lecteur d'écran dans le tiroir
+    $('voile').hidden = !ouverte;
     $('btnToggleSidebar').setAttribute('aria-expanded', String(ouverte));
+    $('navHistorique').setAttribute('aria-expanded', String(ouverte));
+    $('btnToggleSidebar').classList.toggle('actif', ouverte);
+    $('btnStudio').classList.toggle('actif', !ouverte);
     ongletActif(ouverte ? 'historique' : 'enregistrer');
+    if (ouverte && !etaitOuverte) setTimeout(() => $('inputRechercheMobile').focus({ preventScroll: true }), 50);
 }
 
 /** Onglet actif de la navigation mobile : 'enregistrer', 'historique' ou 'compte'. */
@@ -477,6 +482,7 @@ function annulerPipeline() {
 }
 
 function verrouillerEnvoi(verrouiller) {
+    window.Orbe?.analyse(verrouiller);
     $('zoneDepot').classList.toggle('desactive', verrouiller);
     $('inputFileAudio').disabled = verrouiller;
     if (!mediaRecorder || mediaRecorder.state === 'inactive') $('btnEnregistrer').disabled = verrouiller;
@@ -510,6 +516,7 @@ function extensionPour(mime) {
 function arreterMicro() {
     if (fluxMicro) fluxMicro.getTracks().forEach(piste => piste.stop());
     fluxMicro = null;
+    window.Orbe?.silence();
 }
 
 function arreterMinuterie() {
@@ -557,6 +564,7 @@ async function demarrerEnregistrement() {
         };
 
         mediaRecorder.start(1000);
+        window.Orbe?.ecouter(fluxMicro);   // l'orbe réagit au volume de la voix
         debutEnregistrement = Date.now();
         const btn = $('btnEnregistrer');
         btn.classList.add('en-cours');
@@ -608,7 +616,7 @@ function envoyerAuServeur(audioBlob, nomFichier, titre) {
     messageDocument(titre, "Analyse en cours… le résultat s'affichera ici.");
     chargerAudioDansLecteur(audioBlob);
     verrouillerEnvoi(true);
-    if (estMobile()) definirSidebar(false);
+    definirSidebar(false);
 
     const formData = new FormData();
     formData.append('mode', modeChoisi);
@@ -802,7 +810,7 @@ async function envoyerPdf() {
 // HISTORIQUE
 // =========================================================
 function termeRecherche() {
-    return (estMobile() ? $('inputRechercheMobile') : $('inputRechercheHistorique')).value.toLowerCase().trim();
+    return $('inputRechercheMobile').value.toLowerCase().trim();
 }
 
 async function chargerHistoriqueDepuisBDD(suite = false) {
@@ -861,7 +869,7 @@ function ouvrirDepuisHistorique(item) {
     afficherDocument(item);
     if (item.aAudio) chargerAudioDepuisServeur(item.id);
     else viderLecteurAudio();
-    if (estMobile()) definirSidebar(false);
+    definirSidebar(false);
     $('document').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -873,6 +881,7 @@ function mettreAJourAffichageHistorique() {
         item.titre.toLowerCase().includes(terme) || item.texte.toLowerCase().includes(terme)
     );
 
+    afficherRecents();
     liste.replaceChildren();
     $('btnChargerPlus').hidden = !(historiqueEncorePlus && !terme);
 
@@ -904,6 +913,27 @@ function mettreAJourAffichageHistorique() {
     });
 }
 
+/** Raccourcis sous l'orbe vers les trois derniers enregistrements. */
+function afficherRecents() {
+    const zone = $('recents');
+    const derniers = historiqueTranscriptions.slice(0, 3);
+    zone.replaceChildren();
+    zone.hidden = derniers.length === 0;
+    derniers.forEach(item => {
+        const b = element('button', 'recent' + (item.id === idActuel ? ' actif' : ''));
+        b.type = 'button';
+        b.append(element('span', 'recent-titre', item.titre), element('span', 'recent-meta', formaterDate(item.date)));
+        b.addEventListener('click', () => ouvrirDepuisHistorique(item));
+        zone.appendChild(b);
+    });
+    if (historiqueTranscriptions.length > 3) {
+        const tout = element('button', 'recent recent-tout', 'Tout voir');
+        tout.type = 'button';
+        tout.addEventListener('click', () => definirSidebar(true));
+        zone.appendChild(tout);
+    }
+}
+
 // =========================================================
 // CHOIX DU FORMAT
 // =========================================================
@@ -927,6 +957,11 @@ function brancherEvenements() {
 
     // Navigation
     $('btnToggleSidebar').addEventListener('click', () => definirSidebar(!$('sidebar').classList.contains('ouverte')));
+    $('btnStudio').addEventListener('click', () => definirSidebar(false));
+    $('btnFermerSidebar').addEventListener('click', () => {
+        definirSidebar(false);
+        (estMobile() ? $('navHistorique') : $('btnToggleSidebar')).focus();
+    });
     $('voile').addEventListener('click', () => definirSidebar(false));
     $('btnCompte').addEventListener('click', (e) => { e.stopPropagation(); basculerMenuCompte(); });
     $('navCompte').addEventListener('click', (e) => { e.stopPropagation(); basculerMenuCompte(); });
@@ -943,7 +978,7 @@ function brancherEvenements() {
     document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
         fermerMenuCompte();
-        if (estMobile()) definirSidebar(false);
+        if ($('sidebar').classList.contains('ouverte')) definirSidebar(false);
     });
 
     // Capture
@@ -982,7 +1017,6 @@ function brancherEvenements() {
     $('inputEmail').addEventListener('keydown', (e) => { if (e.key === 'Enter') envoyerPdf(); });
 
     // Historique
-    $('inputRechercheHistorique').addEventListener('input', mettreAJourAffichageHistorique);
     $('inputRechercheMobile').addEventListener('input', mettreAJourAffichageHistorique);
     $('btnChargerPlus').addEventListener('click', () => chargerHistoriqueDepuisBDD(true));
 
@@ -995,6 +1029,7 @@ function brancherEvenements() {
 // =========================================================
 document.addEventListener('DOMContentLoaded', () => {
     brancherEvenements();
+    definirSidebar(false);
     choisirMode(lireStockageLocal('gemini_mode') || 'resume');
     viderDocument();
     afficherRetourVerification();
