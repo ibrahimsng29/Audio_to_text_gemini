@@ -46,11 +46,12 @@ L'application est servie sur http://localhost:3000.
 |---|---|
 | `server.js` | Serveur Express : API, authentification, quotas, Gemini, PDF, e-mails. |
 | `public/index.html` | Page de l'application. |
-| `public/app.css` | Styles de l'interface (thème sombre « Studio »), sans bibliothèque externe. |
+| `public/app.css` | Styles de l'interface (thème « Orbe »), sans bibliothèque externe. |
+| `public/orbe.js` | Animation de l'orbe d'enregistrement (réagit au micro) et du ciel étoilé. |
 | `public/app.js` | Logique de l'interface. |
 | `lib/utils.js` | Fonctions utilitaires testées par `npm test`. |
 
-L'interface ne charge rien depuis un site tiers : les polices (Inter, Space Grotesk) sont fournies par
+L'interface ne charge rien depuis un site tiers : les polices (Manrope, Unbounded) sont fournies par
 les paquets `@fontsource` et servies par l'application sous `/polices/`.
 
 ## Connexion avec Google

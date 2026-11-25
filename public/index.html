@@ -6,17 +6,17 @@
     <meta name="color-scheme" content="dark">
     <title>Gemini Audio</title>
     <link rel="stylesheet" href="/app.css">
+    <script src="/orbe.js" defer></script>
     <script src="/app.js" defer></script>
 </head>
 <body>
+    <canvas id="ciel" class="ciel" aria-hidden="true"></canvas>
 
     <!-- ============ CONNEXION / INSCRIPTION ============ -->
     <div id="auth-section" class="auth">
         <div class="auth-carte">
             <div class="logo logo-grand">
-                <span class="logo-icone" aria-hidden="true">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4"/></svg>
-                </span>
+                <span class="logo-icone" aria-hidden="true"></span>
                 <span class="logo-texte">Gemini Audio</span>
             </div>
             <h1 id="auth-title" class="auth-titre">Connexion</h1>
@@ -57,20 +57,15 @@
     <div id="app-section" class="app" hidden>
 
         <header class="topbar">
-            <button id="btnToggleSidebar" class="btn-icone mobile-seulement" aria-label="Afficher l'historique" aria-controls="sidebar" aria-expanded="false">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-            </button>
             <div class="logo">
-                <span class="logo-icone" aria-hidden="true">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4"/></svg>
-                </span>
+                <span class="logo-icone" aria-hidden="true"></span>
                 <span class="logo-texte">Gemini Audio</span>
             </div>
 
-            <label class="recherche ordinateur-seulement">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-                <input type="search" id="inputRechercheHistorique" placeholder="Rechercher dans vos enregistrements" aria-label="Rechercher dans vos enregistrements">
-            </label>
+            <nav class="nav-studio ordinateur-seulement" aria-label="Navigation principale">
+                <button id="btnStudio" type="button" class="nav-studio-el actif" aria-current="page">Studio</button>
+                <button id="btnToggleSidebar" type="button" class="nav-studio-el" aria-controls="sidebar" aria-expanded="false">Bibliothèque</button>
+            </nav>
 
             <div class="topbar-droite">
                 <div class="stockage ordinateur-seulement" title="Espace utilisé par vos enregistrements audio" hidden>
@@ -97,12 +92,18 @@
 
         <div class="disposition">
             <!-- Historique -->
-            <aside id="sidebar" class="sidebar" aria-label="Historique">
-                <label class="recherche mobile-seulement">
+            <aside id="sidebar" class="sidebar" aria-label="Bibliothèque">
+                <div class="sidebar-entete">
+                    <h2 class="sidebar-titre">Bibliothèque</h2>
+                    <button id="btnFermerSidebar" type="button" class="btn-icone" aria-label="Fermer la bibliothèque">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                    </button>
+                </div>
+                <label class="recherche">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-                    <input type="search" id="inputRechercheMobile" placeholder="Rechercher" aria-label="Rechercher dans vos enregistrements">
+                    <input type="search" id="inputRechercheMobile" placeholder="Rechercher dans vos enregistrements" aria-label="Rechercher dans vos enregistrements">
                 </label>
-                <h2 class="surtitre">Récents</h2>
+                <h3 class="surtitre">Tous vos enregistrements</h3>
                 <div id="listeHistorique" class="historique">
                     <p id="aucunHistorique" class="historique-vide">Aucun enregistrement pour l'instant</p>
                 </div>
@@ -113,20 +114,19 @@
             <main id="mainContent" class="principal">
 
                 <!-- Nouvel enregistrement -->
-                <section class="carte capture" aria-labelledby="titreCapture">
-                    <h2 id="titreCapture" class="sr-only">Nouvel enregistrement</h2>
-                    <div class="capture-actions">
-                        <button id="btnEnregistrer" class="btn btn-rec">
-                            <span class="point-rec" aria-hidden="true"></span>
-                            <span class="libelle">Enregistrer</span>
-                        </button>
-                        <label id="zoneDepot" class="depot">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
-                            <span>Importer ou glisser un fichier</span>
-                            <input type="file" id="inputFileAudio" accept="audio/*,video/*" class="sr-only">
-                        </label>
-                        <span class="capture-aide">MP3, M4A, WAV, MP4… jusqu'à 100 Mo</span>
-                    </div>
+                <section class="capture" aria-labelledby="titreCapture">
+                    <button id="btnEnregistrer" class="orbe" aria-pressed="false" aria-describedby="sousCapture">
+                        <span class="orbe-sphere" aria-hidden="true"><canvas id="orbeCanvas"></canvas></span>
+                        <span class="libelle">Enregistrer</span>
+                    </button>
+                    <h2 id="titreCapture" class="capture-titre">Votre voix devient un document</h2>
+                    <p id="sousCapture" class="capture-sous">Touchez l'orbe pour enregistrer, ou importez un fichier.</p>
+                    <label id="zoneDepot" class="depot">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
+                        <span>Importer ou glisser un fichier</span>
+                        <input type="file" id="inputFileAudio" accept="audio/*,video/*" class="sr-only">
+                    </label>
+                    <span class="capture-aide">MP3, M4A, WAV, MP4… jusqu'à 100 Mo</span>
                     <div class="pastilles" role="group" aria-label="Format du résultat" id="choixMode">
                         <button type="button" class="pastille" data-mode="resume" aria-pressed="true">Résumé</button>
                         <button type="button" class="pastille" data-mode="cours" aria-pressed="false">Cours + quiz</button>
@@ -148,10 +148,12 @@
                         </ol>
                         <button id="btnAnnuler" class="btn btn-secondaire btn-petit" hidden>Annuler</button>
                     </div>
+
+                    <div id="recents" class="recents" aria-label="Derniers enregistrements" hidden></div>
                 </section>
 
                 <!-- Document -->
-                <article id="document" class="carte document">
+                <article id="document" class="document">
                     <div class="document-entete">
                         <div class="document-titres">
                             <h1 id="docTitre" class="document-titre">Aucun document ouvert</h1>
@@ -212,11 +214,11 @@
         <nav class="nav-mobile mobile-seulement" aria-label="Navigation principale">
             <button id="navEnregistrer" class="nav-item actif">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
-                Enregistrer
+                Studio
             </button>
-            <button id="navHistorique" class="nav-item">
+            <button id="navHistorique" class="nav-item" aria-controls="sidebar">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
-                Historique
+                Bibliothèque
             </button>
             <button id="navCompte" class="nav-item">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
